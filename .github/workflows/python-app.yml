@@ -24,6 +24,7 @@ jobs:
           frozen: true
 
       - name: Clear pixi cache and rebuild environment
+        shell: bash
         run: |
           rm -rf .pixi
           pixi install
