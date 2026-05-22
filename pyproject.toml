@@ -33,7 +33,12 @@ Homepage = "https://github.com/scikit-learn-contrib/pyFOCI"
 Issues = "https://github.com/scikit-learn-contrib/pyFOCI/issues"
 
 [tool.setuptools_scm]
-version_file = "pyFOCI/_version.py"
+# Ensure the version is written into the package at build time.
+# `write_to` is the recommended key for setuptools_scm.
+write_to = "pyFOCI/_version.py"
+
+[tool.setuptools.packages.find]
+include = ["pyFOCI*"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
@@ -44,6 +49,8 @@ python = ">=3.9"
 scikit-learn = ">=1.4.2"
 numpy = "*"
 openblas = "*"
+python-build = "*"
+twine = "*"
 
 [tool.pixi.pypi-dependencies]
 pyFOCI = { path=".", editable=true }
@@ -85,6 +92,14 @@ doc = ["doc"]
 lint = ["lint"]
 test = ["test"]
 dev = ["doc", "lint", "test"]
+
+[tool.pixi.tasks]
+# Build sdist and wheel into dist/
+build = "python -m build"
+# Validate long description and metadata
+check-dist = "twine check dist/*"
+upload-test = "twine upload --repository testpypi dist/*"
+upload = "twine upload dist/*"
 
 [tool.black]
 line-length = 88
