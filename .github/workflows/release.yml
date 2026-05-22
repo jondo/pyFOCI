@@ -32,7 +32,7 @@ jobs:
           path: dist/*
 
   publish-testpypi:
-    name: Publish to TestPyPI (pre-releases)
+    name: Publish to TestPyPI
     needs: build
     runs-on: ubuntu-latest
     environment:
