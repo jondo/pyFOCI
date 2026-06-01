@@ -5,9 +5,9 @@ import pytest
 from sklearn.datasets import load_iris
 from sklearn.utils._testing import assert_allclose
 
-from pyFOCI import TemplateTransformer
+from pyFOCI import FOCISelector
 
-# Authors: scikit-learn-contrib developers
+# Authors: scikit-learn-contrib developers, Robert Pollak <robert.pollak@jku.at>
 # License: BSD 3 clause
 
 
@@ -16,10 +16,10 @@ def data():
     return load_iris(return_X_y=True)
 
 
-def test_template_transformer(data):
-    """Check the internals and behaviour of `TemplateTransformer`."""
+def test_foci_selector(data):
+    """Check the internals and behaviour of `FOCISelector`."""
     X, y = data
-    trans = TemplateTransformer()
+    trans = FOCISelector()
     assert trans.demo_param == "demo"
 
     trans.fit(X)

@@ -1,10 +1,10 @@
-# Authors: scikit-learn-contrib developers
+# Authors: scikit-learn-contrib developers, Robert Pollak <robert.pollak@jku.at>
 # License: BSD 3 clause
 
-from ._template import TemplateTransformer
+from ._foci import FOCISelector
 from ._version import __version__
 
 __all__ = [
-    "TemplateTransformer",
+    "FOCISelector",
     "__version__",
 ]

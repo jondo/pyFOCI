@@ -2,7 +2,7 @@
 This is a module to be used as a reference for building other modules
 """
 
-# Authors: scikit-learn-contrib developers
+# Authors: scikit-learn-contrib developers, Robert Pollak <robert.pollak@jku.at>
 # License: BSD 3 clause
 
 import numpy as np
@@ -12,7 +12,7 @@ from sklearn.utils.validation import validate_data  # , check_is_fitted
 
 # Note that the mixin class should always be on the left of `BaseEstimator` to ensure
 # the MRO works as expected.
-class TemplateTransformer(TransformerMixin, BaseEstimator):
+class FOCISelector(TransformerMixin, BaseEstimator):
     """An example transformer that returns the element-wise square root.
 
     For more information regarding how to build your own transformer, read more
