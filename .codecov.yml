@@ -1,0 +1,3 @@
+# Only post if coverage drops
+comment:
+  require_changes: "coverage_drop"
