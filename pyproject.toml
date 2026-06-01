@@ -10,6 +10,7 @@ authors = [
 ]
 description = "A template for scikit-learn compatible packages."
 readme = "README.md"
+license = "BSD-3-Clause"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "scikit-learn==1.8",
@@ -18,7 +19,6 @@ dependencies = [
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX",
     "Operating System :: Unix",
     "Operating System :: MacOS",
