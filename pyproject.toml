@@ -10,16 +10,13 @@ authors = [
 ]
 description = "A template for scikit-learn compatible packages."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12,<3.13"
 dependencies = [
   "scikit-learn==1.6.1",
   "numpy",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX",
@@ -45,7 +42,7 @@ channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
-python = ">=3.9"
+python = ">=3.12,<3.13"
 scikit-learn = "==1.6.1"
 numpy = "*"
 openblas = "*"
@@ -57,7 +54,7 @@ pyFOCI = { path=".", editable=true }
 
 [tool.pixi.feature.lint.dependencies]
 # The version below should be aligned with the one of `.pre-commit-config.yaml`
-black = "==23.3.0"
+black = "==24.4.2"
 pre-commit = "==3.7.1"
 ruff = "==0.4.2"
 
@@ -103,7 +100,7 @@ upload = "twine upload dist/*"
 
 [tool.black]
 line-length = 88
-target_version = ['py38', 'py39', 'py310']
+target_version = ['py312']
 preview = true
 exclude = '''
 /(
@@ -117,7 +114,7 @@ force-exclude = "pyFOCI/_version.py"
 [tool.ruff]
 # max line length for black
 line-length = 88
-target-version = "py38"
+target-version = "py312"
 exclude=[
     ".git",
     "__pycache__",
