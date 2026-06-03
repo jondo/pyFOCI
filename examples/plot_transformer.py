@@ -3,7 +3,7 @@
 Plotting FOCISelector
 =====================
 
-An example plot of :class:`pyFOCI.foci.FOCISelector`
+An example plot of :class:`pyFOCI.FOCISelector`
 """
 
 import numpy as np
