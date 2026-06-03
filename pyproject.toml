@@ -45,6 +45,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 python = ">=3.12,<3.13"
 scikit-learn = "==1.8"
 numpy = "*"
+pandas = "*"
 openblas = "*"
 python-build = "*"
 twine = "*"
