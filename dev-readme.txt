@@ -9,7 +9,8 @@ pixi run test  # select environment 'test'
 
 pixi run build
 
-pixi run build-doc
+pixi run clean-doc  # select environment 'doc'
+pixi run build-doc  # select environment 'doc'
 
 Commit to a dev branch.
 

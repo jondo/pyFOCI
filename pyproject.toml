@@ -82,7 +82,7 @@ sphinx-prompt = "*"
 
 [tool.pixi.feature.doc.tasks]
 build-doc = { cmd = "make html", cwd = "doc" }
-clean-doc = { cmd = "rm -rf _build", cwd = "doc" }
+clean-doc = { cmd = "rm -rf _build generated", cwd = "doc" }
 
 [tool.pixi.environments]
 doc = ["doc"]
