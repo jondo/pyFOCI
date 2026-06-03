@@ -1,7 +1,7 @@
 """
-=============================
-Plotting Template Transformer
-=============================
+=====================
+Plotting FOCISelector
+=====================
 
 An example plot of :class:`pyFOCI.foci.FOCISelector`
 """
