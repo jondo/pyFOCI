@@ -27,3 +27,5 @@ printf 'Fast-forwarding main to dev: '; git merge-base --is-ancestor main dev &&
 
 git push origin main:main
 
+Delete dev branch in pull request, for easier creation of the next pull request.
+
