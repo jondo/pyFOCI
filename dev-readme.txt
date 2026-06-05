@@ -25,6 +25,6 @@ Create pull request to trigger CI tests.
 printf 'Fast-forwarding main to dev: '; git merge-base --is-ancestor main dev && git branch -f main dev && echo OK || echo ERROR
 
 git push origin main:main
-
-Delete dev branch in pull request, for easier creation of the next pull request.
+# By this, The Github repo setting "Automatically delete head branches"
+# deletes the dev branch in the pull request, for easier creation of the next pull request from dev.
 
