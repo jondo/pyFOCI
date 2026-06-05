@@ -9,7 +9,6 @@ pixi run -e test test
 
 pixi run build
 
-pixi run -e doc clean-doc
 pixi run -e doc build-doc
 
 Commit to a dev branch.
