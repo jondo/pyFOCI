@@ -3,14 +3,14 @@ Testing and merging:
 
 1. Locally:
 
-pixi run lint  # select environment 'lint'
+pixi run -e lint lint
 
-pixi run test  # select environment 'test'
+pixi run -e test test
 
 pixi run build
 
-pixi run clean-doc  # select environment 'doc'
-pixi run build-doc  # select environment 'doc'
+pixi run -e doc clean-doc
+pixi run -e doc build-doc
 
 Commit to a dev branch.
 
