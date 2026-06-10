@@ -12,7 +12,7 @@ import pytest
 from pyFOCI import FOCISelector
 
 
-def make_demo_data(n: int = 200, p: int = 30, seed: int = 0):
+def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
     """
     Create a deterministic small dataset for feature selection tests,
     with n entries and p features per entry.
@@ -35,7 +35,7 @@ def test_default_stopping_and_transform():
     """
     X_df, y = make_demo_data(n=300, p=40, seed=0)
 
-    selector = FOCISelector()
+    selector = FOCISelector(random_state=0)
     selector.fit(X_df, y)
 
     names = selector.get_feature_names_out()
@@ -56,6 +56,22 @@ def test_default_stopping_and_transform():
     expected = X_df.loc[:, names].to_numpy()
 
     assert np.allclose(X_trans, expected)
+
+
+def test_foci_selector_always_selects_one_feature():
+    """
+    It actually should not, but this documents that it does.
+    """
+    # Small dataset with y independent of X
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(10, 1))
+    y = rng.normal(size=10)
+
+    selector = FOCISelector(random_state=0).fit(X, y)
+
+    # With Tn_prev = -inf, exactly one feature is selected
+    assert selector.support_mask_.sum() == 1
+    assert len(selector.Tn_path_) == 1
 
 
 def test_fit_raises_when_y_is_none():

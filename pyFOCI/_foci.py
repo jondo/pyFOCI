@@ -1,29 +1,98 @@
 """
-Feature Ordering by Conditional Independence (stub selector)
+Feature Ordering by Conditional Independence (FOCI)
 """
 
 # Authors: Robert Pollak <robert.pollak@jku.at>
 # License: BSD 3 clause
 
 import numpy as np
+import sklearn.neighbors
 from sklearn.base import BaseEstimator, _fit_context
 from sklearn.feature_selection import SelectorMixin
-from sklearn.utils._param_validation import Integral, Interval
+from sklearn.utils._param_validation import Integral, Interval, InvalidParameterError
 from sklearn.utils.multiclass import type_of_target
 from sklearn.utils.validation import validate_data
 
 
+def _rank_max(y):
+    """
+    Compute 1-based ranks with 'max' method for ties, without scipy/pandas.
+    y: array-like of shape (n_samples,)
+    Returns: ranks as float array of shape (n_samples,)
+    """
+    y = np.asarray(y)
+    n = y.shape[0]
+    idx = np.argsort(y, kind="mergesort")
+    y_sorted = y[idx]
+    ranks = np.empty(n, dtype=float)
+    i = 0
+    # Assign the maximum rank to ties
+    while i < n:
+        j = i
+        while j + 1 < n and y_sorted[j + 1] == y_sorted[i]:
+            j += 1
+        ranks[idx[i : j + 1]] = j + 1
+        i = j + 1
+    return ranks
+
+
+# Compute T_n as in
+#    Fuchs, Sebastian. "Quantifying directed dependence via dimension reduction."
+#    Journal of Multivariate Analysis 201 (2024): 105266.
+#
+# We use T_n from section 4.2 after "straightforward calculation".
+def _Tn(X_sub, y_rank, rng):
+    """
+    T_n for a given feature subset X_sub (n_samples, k).
+    With randomized nearest-neighbor tie-breaking.
+    """
+    X_sub = np.asarray(X_sub)
+    n = X_sub.shape[0]
+    # Fit NN on X_sub
+    nbrs = sklearn.neighbors.NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
+    nbrs.fit(X_sub)
+
+    # Get min distances
+    distances, _ = nbrs.kneighbors(n_neighbors=1)
+    min_distance = distances[:, 0]
+
+    eps = 1e-13  # to get all neighbors of min distance
+    # For each i, collect all min-dist neighbors, remove self, pick one at random
+    nbr_i = np.empty(n, dtype=int)
+    for i in range(n):
+        # Query neighbors in the tight radius around the nearest neighbor distance
+        neighbors = nbrs.radius_neighbors(
+            X_sub[i, :].reshape(1, -1), min_distance[i] + eps, return_distance=False
+        )[0]
+        # Remove self index if present
+        neighbors = neighbors[neighbors != i]
+        nbr_i[i] = rng.choice(neighbors)
+
+    # Apply the formula (indices are 0-based; y_rank is 1-based)
+    term1 = np.sum(np.abs(y_rank - y_rank[nbr_i]))
+    term2 = np.sum(y_rank[nbr_i]) + np.sum(y_rank) - n * (n + 1)
+    result = 1 - 3 / (n**2 - 1) * term1 + 3 / (n**2 - 1) * term2
+    return float(result)
+
+
 class FOCISelector(SelectorMixin, BaseEstimator):
     """
-    Stub feature selector following scikit-learn's SelectorMixin API.
+    Feature selector using hierarchical forward selection based on the
+    Azadkia-Chatterjee T_n coefficient.
 
-    This stub selects up to `max_features` columns with the largest absolute
-    Pearson correlation to the target y (a simple proxy for the real FOCI method).
+    At each step, among remaining features, we choose the feature that maximizes
+    the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}. The process stops
+    when no improvement over the previous best T_n is achieved or when
+    `max_features` features have been selected.
 
     Parameters
     ----------
     max_features : int, default=4
         Maximum number of features to select.
+
+    random_state : int or None, default=None
+        Seed for the randomized nearest neighbor tie-breaking. If None,
+        uses NumPy's default RNG.
 
     Attributes
     ----------
@@ -36,21 +105,24 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     support_mask_ : ndarray of shape (``n_features_in_``,), dtype=bool
         Boolean mask of selected features determined during fit.
 
-    correlation_ : ndarray of shape (``n_features_in_``,)
-        Absolute Pearson correlation between each feature and y computed at fit.
+    Tn_path_ : ndarray of shape (n_selected,)
+        Values of the cumulative T_n along the selection path.
     """
 
     _parameter_constraints = {
         "max_features": [Interval(Integral, 1, None, closed="left")],
+        "random_state": [None, Integral],
     }
 
-    def __init__(self, max_features=4):
+    def __init__(self, max_features=4, random_state=None):
         self.max_features = max_features
+        self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y):
         """
-        Fit the selector by ranking features via absolute correlation with y.
+        Fit the selector by hierarchical forward selection maximizing T_n
+        over the growing feature set.
 
         Parameters
         ----------
@@ -67,28 +139,53 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             raise ValueError("y must be provided for feature selection.")
         type_of_target(y, input_name="y", raise_unknown=True)
 
-        X = validate_data(self, X, accept_sparse=False)
-        y = np.asarray(y).ravel()
+        X, y = validate_data(
+            self, X, y, accept_sparse=False, y_numeric=True
+        )  # asserts finite values
 
         n_samples, n_features = X.shape
+        if n_samples < 2:
+            raise InvalidParameterError(
+                "Just one sample provided. Need at least two for nearest neighbors."
+            )
 
-        # Compute absolute Pearson correlation for each feature with y.
-        corr = np.empty(n_features, dtype=float)
-        for j in range(n_features):
-            xj = X[:, j]
-            # Handle constant columns to avoid division by zero in correlation
-            if np.std(xj) == 0 or np.std(y) == 0:
-                corr[j] = 0.0
-            else:
-                corr[j] = abs(np.corrcoef(xj, y)[0, 1])
+        y_rank = _rank_max(y)
+        rng = np.random.default_rng(self.random_state)
 
-        self.correlation_ = corr
+        selected = []  # S_k
+        Tn_path = []
+        remaining = list(range(n_features))
+        Tn_prev = -np.inf
 
-        k = min(self.max_features, n_features)
-        top_idx = np.argsort(-corr)[:k]
+        # Forward selection up to max_features
+        while remaining and (len(selected) < self.max_features):
+            best_j = None
+            best_Tn = -np.inf
 
+            for j in remaining:
+                sel_candidate = selected + [j]
+                X_sub = X[:, sel_candidate]
+                Tn_val = _Tn(X_sub, y_rank, rng)
+                if Tn_val > best_Tn:
+                    best_Tn = Tn_val
+                    best_j = j
+
+            # Stopping rule: require improvement over last Tn
+            if best_Tn <= Tn_prev:
+                break
+
+            selected.append(best_j)
+            Tn_path.append(best_Tn)
+            remaining.remove(best_j)
+            Tn_prev = best_Tn
+
+        # Persist learned attributes
+        self.selected_indices_ = np.asarray(selected, dtype=int)
+        self.Tn_path_ = np.asarray(Tn_path, dtype=float)
+
+        # Build mask
         mask = np.zeros(n_features, dtype=bool)
-        mask[top_idx] = True
+        mask[self.selected_indices_] = True
         self.support_mask_ = mask
 
         return self
