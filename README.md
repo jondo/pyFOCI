@@ -1,18 +1,19 @@
-pyFOCI - A template for scikit-learn contributions
+pyFOCI - Feature Ordering by Conditional Independence
 ============================================================
 
 ![tests](https://github.com/m3dm-jku/pyFOCI/actions/workflows/python-app.yml/badge.svg)
 [![codecov](https://codecov.io/gh/m3dm-jku/pyFOCI/graph/badge.svg?token=L0XPWwoPLw)](https://codecov.io/gh/m3dm-jku/pyFOCI)
 ![doc](https://github.com/m3dm-jku/pyFOCI/actions/workflows/deploy-gh-pages.yml/badge.svg)
 
-**pyFOCI** is a template project for [scikit-learn](https://scikit-learn.org)
-compatible extensions.
+**pyFOCI** provides the feature selection algorithm "Feature Ordering by Conditional Independence" (FOCI),
+as published in:
+> Mona Azadkia and Sourav Chatterjee. A simple measure of conditional dependence.
+> The Annals of Statistics, 49(6):3070–3102, 2021. [[DOI]](https://doi.org/10.1214/21-AOS2073) [[arXiv]](https://arxiv.org/abs/1910.12327)
 
-It aids development of estimators that can be used in scikit-learn pipelines and
-(hyper)parameter search, while facilitating testing (including some API compliance),
-documentation, open source development, packaging, and continuous integration.
+The implementation also uses:
+> Sebastian Fuchs. Quantifying directed dependence via dimension reduction.
+> Journal of Multivariate Analysis 201 (2024): 105266. [[DOI]](https://doi.org/10.1016/j.jmva.2023.105266) [[arXiv]](https://arxiv.org/abs/2112.10147)
 
-Refer to the documentation to modify the template for your own scikit-learn
-contribution: https://m3dm-jku.github.io/pyFOCI/
+The Package is [scikit-learn](https://scikit-learn.org) compatible. It is available [on PyPI](https://pypi.org/project/pyFOCI/).
 
-*Thank you for cleanly contributing to the scikit-learn ecosystem!*
+Refer to the documentation at https://m3dm-jku.github.io/pyFOCI/ .
