@@ -28,3 +28,10 @@ git push origin main:main
 # By this, The Github repo setting "Automatically delete head branches"
 # deletes the dev branch in the pull request, for easier creation of the next pull request from dev.
 
+
+Releasing:
+==========
+
+Following [Semantic Versioning](https://semver.org/), add a tag like "v0.1.2" to a commit and push it.
+A Github action will then publish this Release to PyPI.
+
