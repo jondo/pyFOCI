@@ -7,11 +7,11 @@ pixi run -e lint lint
 
 pixi run -e test test
 
-pixi run build
-
 pixi run -e doc build-doc
 
 Commit to a dev branch.
+
+pixi run build
 
 
 2. CI:
