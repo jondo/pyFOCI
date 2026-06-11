@@ -15,10 +15,17 @@ from sklearn.utils.validation import validate_data
 
 
 def _rank_max(y):
-    """
-    Compute 1-based ranks with 'max' method for ties, without scipy/pandas.
-    y: array-like of shape (n_samples,)
-    Returns: ranks as float array of shape (n_samples,)
+    """Compute 1-based ranks with the ``max`` method for ties.
+
+    Parameters
+    ----------
+    y : array-like of shape (n_samples,)
+        Values to rank.
+
+    Returns
+    -------
+    ranks : ndarray of shape (n_samples,), dtype=float
+        One-based ranks, assigning the maximum rank to tied values.
     """
     y = np.asarray(y)
     n = y.shape[0]
@@ -36,15 +43,30 @@ def _rank_max(y):
     return ranks
 
 
-# Compute T_n as in
-#    Fuchs, Sebastian. "Quantifying directed dependence via dimension reduction."
-#    Journal of Multivariate Analysis 201 (2024): 105266.
-#
-# We use T_n from section 4.2 after "straightforward calculation".
 def _Tn(X_sub, y_rank, rng):
-    """
-    T_n for a given feature subset X_sub (n_samples, k).
-    With randomized nearest-neighbor tie-breaking.
+    """Compute :math:`T_n` following Fuchs (2024).
+
+    The implementation uses the expression for :math:`T_n` given in
+    Section 4.2 after "straightforward calculation" in:
+
+        Fuchs, Sebastian. "Quantifying directed dependence via dimension
+        reduction." Journal of Multivariate Analysis 201 (2024): 105266.
+
+    Parameters
+    ----------
+    X_sub : array-like of shape (n_samples, n_selected_features)
+        Candidate subset of the input features used to compute nearest
+        neighbors.
+    y_rank : ndarray of shape (n_samples,)
+        One-based ranks of the target values, typically computed with
+        :func:`_rank_max`.
+    rng : numpy.random.Generator or numpy.random.RandomState
+        Random number generator used to break nearest-neighbor ties.
+
+    Returns
+    -------
+    Tn : float
+        Value of the :math:`T_n` statistic for ``X_sub`` and ``y_rank``.
     """
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
