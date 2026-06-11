@@ -8,6 +8,7 @@ import re
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.utils._testing import assert_allclose
 
 from pyFOCI import FOCISelector
 
@@ -55,7 +56,7 @@ def test_default_stopping_and_transform():
     # Build expected output using reported names
     expected = X_df.loc[:, names].to_numpy()
 
-    assert np.allclose(X_trans, expected)
+    assert_allclose(X_trans, expected)
 
 
 def test_foci_selector_always_selects_one_feature():
