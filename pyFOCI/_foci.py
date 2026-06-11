@@ -9,6 +9,7 @@ import numpy as np
 import sklearn.neighbors
 from sklearn.base import BaseEstimator, _fit_context
 from sklearn.feature_selection import SelectorMixin
+from sklearn.utils import check_random_state
 from sklearn.utils._param_validation import Integral, Interval, InvalidParameterError
 from sklearn.utils.multiclass import type_of_target
 from sklearn.utils.validation import validate_data
@@ -43,7 +44,7 @@ def _rank_max(y):
     return ranks
 
 
-def _Tn(X_sub, y_rank, rng):
+def _Tn(X_sub, y_rank, random_state):
     """Compute :math:`T_n` following Fuchs (2024).
 
     The implementation uses the expression for :math:`T_n` given in
@@ -60,7 +61,7 @@ def _Tn(X_sub, y_rank, rng):
     y_rank : ndarray of shape (n_samples,)
         One-based ranks of the target values, typically computed with
         :func:`_rank_max`.
-    rng : numpy.random.Generator or numpy.random.RandomState
+    random_state : numpy.random.RandomState
         Random number generator used to break nearest-neighbor ties.
 
     Returns
@@ -88,7 +89,7 @@ def _Tn(X_sub, y_rank, rng):
         )[0]
         # Remove self index if present
         neighbors = neighbors[neighbors != i]
-        nbr_i[i] = rng.choice(neighbors)
+        nbr_i[i] = random_state.choice(neighbors)
 
     # Apply the formula (indices are 0-based; y_rank is 1-based)
     term1 = np.sum(np.abs(y_rank - y_rank[nbr_i]))
@@ -112,9 +113,10 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     max_features : int, default=4
         Maximum number of features to select.
 
-    random_state : int or None, default=None
-        Seed for the randomized nearest neighbor tie-breaking. If None,
-        uses NumPy's default RNG.
+    random_state : int, RandomState instance or None, default=None
+        Controls the random tie-breaking among nearest neighbors. Pass an int
+        for reproducible results across multiple calls. If None, the global
+        NumPy random state is used.
 
     Attributes
     ----------
@@ -133,7 +135,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
 
     _parameter_constraints = {
         "max_features": [Interval(Integral, 1, None, closed="left")],
-        "random_state": [None, Integral],
+        "random_state": ["random_state"],
     }
 
     def __init__(self, max_features=4, random_state=None):
@@ -172,7 +174,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             )
 
         y_rank = _rank_max(y)
-        rng = np.random.default_rng(self.random_state)
+        random_state = check_random_state(self.random_state)
 
         selected = []  # S_k
         Tn_path = []
@@ -187,7 +189,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             for j in remaining:
                 sel_candidate = selected + [j]
                 X_sub = X[:, sel_candidate]
-                Tn_val = _Tn(X_sub, y_rank, rng)
+                Tn_val = _Tn(X_sub, y_rank, random_state)
                 if Tn_val > best_Tn:
                     best_Tn = Tn_val
                     best_j = j
