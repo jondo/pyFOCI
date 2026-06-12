@@ -104,14 +104,22 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     Azadkia-Chatterjee T_n coefficient.
 
     At each step, among remaining features, we choose the feature that maximizes
-    the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}. The process stops
-    when no improvement over the previous best T_n is achieved or when
-    `max_features` features have been selected.
+    the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}.
+
+    Stopping behavior is controlled by the `stop` flag:
+      - If stop=True, after the first scan, if the best T_n <= 0, no variable
+        is selected. At subsequent steps, if the best T_n does not improve
+        over the previous best, selection stops immediately.
+      - If stop=False, early stopping is ignored and features are selected
+        up to `max_features`, ordered by decreasing T_n at each step.
 
     Parameters
     ----------
     max_features : int, default=4
         Maximum number of features to select.
+
+    stop : bool, default=True
+        Whether to apply early stopping based on improvements in T_n.
 
     random_state : int, RandomState instance or None, default=None
         Controls the random tie-breaking among nearest neighbors. Pass an int
@@ -135,11 +143,13 @@ class FOCISelector(SelectorMixin, BaseEstimator):
 
     _parameter_constraints = {
         "max_features": [Interval(Integral, 1, None, closed="left")],
+        "stop": [bool],
         "random_state": ["random_state"],
     }
 
-    def __init__(self, max_features=4, random_state=None):
+    def __init__(self, max_features=4, stop=True, random_state=None):
         self.max_features = max_features
+        self.stop = stop
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
@@ -194,10 +204,20 @@ class FOCISelector(SelectorMixin, BaseEstimator):
                     best_Tn = Tn_val
                     best_j = j
 
-            # Stopping rule: require improvement over last Tn
-            if best_Tn <= Tn_prev:
-                break
+            # Early stopping behavior controlled by self.stop
+            if self.stop:
+                # First step: if best_Tn <= 0, select nothing and return
+                if len(selected) == 0 and best_Tn <= 0:
+                    self.selected_indices_ = np.asarray([], dtype=int)
+                    self.Tn_path_ = np.asarray([], dtype=float)
+                    mask = np.zeros(n_features, dtype=bool)
+                    self.support_mask_ = mask
+                    return self
+                # Subsequent steps: stop if no improvement
+                if best_Tn <= Tn_prev:
+                    break
 
+            # Always add the best feature this round
             selected.append(best_j)
             Tn_path.append(best_Tn)
             remaining.remove(best_j)

@@ -59,20 +59,36 @@ def test_default_stopping_and_transform():
     assert_allclose(X_trans, expected)
 
 
-def test_foci_selector_always_selects_one_feature():
+def test_stop_true_may_select_none_on_independent_data():
     """
-    It actually should not, but this documents that it does.
+    With stop=True (default), on data where y is independent of X,
+    the selector can select no features if the best initial Tn <= 0.
     """
     # Small dataset with y independent of X
     random_state = np.random.RandomState(0)
     X = random_state.normal(size=(10, 1))
     y = random_state.normal(size=10)
 
-    selector = FOCISelector(random_state=0).fit(X, y)
+    selector = FOCISelector(random_state=0, stop=True).fit(X, y)
 
-    # With Tn_prev = -inf, exactly one feature is selected
-    assert selector.support_mask_.sum() == 1
-    assert len(selector.Tn_path_) == 1
+    # With early stopping enabled, zero features may be selected
+    assert selector.support_mask_.sum() == 0
+    assert len(selector.Tn_path_) == 0
+
+
+def test_stop_false_ignores_early_stopping_and_selects_up_to_max():
+    """
+    With stop=False, early stopping is ignored and features are selected
+    up to max_features even on independent data.
+    """
+    random_state = np.random.RandomState(0)
+    X = random_state.normal(size=(20, 5))
+    y = random_state.normal(size=20)
+
+    selector = FOCISelector(random_state=0, stop=False, max_features=3).fit(X, y)
+
+    assert selector.support_mask_.sum() == 3
+    assert len(selector.Tn_path_) == 3
 
 
 def test_fit_raises_when_y_is_none():
