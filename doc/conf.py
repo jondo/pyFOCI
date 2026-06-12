@@ -58,7 +58,7 @@ html_sidebars = {
 
 html_theme_options = {
     "external_links": [],
-    "github_url": "https://github.com/scikit-learn-contrib/pyFOCI",
+    "github_url": "https://github.com/m3dm-jku/pyFOCI",
     # "twitter_url": "https://twitter.com/pandas_dev",
     "use_edit_page_button": True,
     "show_toc_level": 1,
@@ -66,7 +66,7 @@ html_theme_options = {
 }
 
 html_context = {
-    "github_user": "scikit-learn-contrib",
+    "github_user": "m3dm-jku",
     "github_repo": "pyFOCI",
     "github_version": "master",
     "doc_path": "doc",
