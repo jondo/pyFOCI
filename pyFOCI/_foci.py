@@ -115,8 +115,10 @@ class FOCISelector(SelectorMixin, BaseEstimator):
 
     Parameters
     ----------
-    max_features : int, default=4
-        Maximum number of features to select.
+    max_features : int or None, default=None
+        Maximum number of features to select. If None, no hard cap is applied
+        and selection proceeds until early stopping (if `stop=True`) or until
+        all features are selected (if `stop=False`).
 
     stop : bool, default=True
         Whether to apply early stopping based on improvements in T_n.
@@ -142,12 +144,12 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     """
 
     _parameter_constraints = {
-        "max_features": [Interval(Integral, 1, None, closed="left")],
+        "max_features": [None, Interval(Integral, 1, None, closed="left")],
         "stop": [bool],
         "random_state": ["random_state"],
     }
 
-    def __init__(self, max_features=4, stop=True, random_state=None):
+    def __init__(self, max_features=None, stop=True, random_state=None):
         self.max_features = max_features
         self.stop = stop
         self.random_state = random_state
@@ -186,13 +188,15 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         y_rank = _rank_max(y)
         random_state = check_random_state(self.random_state)
 
+        max_features = n_features if self.max_features is None else self.max_features
+
         selected = []  # S_k
         Tn_path = []
         remaining = list(range(n_features))
         Tn_prev = -np.inf
 
         # Forward selection up to max_features
-        while remaining and (len(selected) < self.max_features):
+        while remaining and (len(selected) < max_features):
             best_j = None
             best_Tn = -np.inf
 

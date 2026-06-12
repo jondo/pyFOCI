@@ -8,6 +8,7 @@ import re
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.utils._param_validation import InvalidParameterError
 from sklearn.utils._testing import assert_allclose
 
 from pyFOCI import FOCISelector
@@ -98,7 +99,7 @@ def test_fit_raises_when_y_is_none():
         sel.fit(X, y=None)
 
 
-@pytest.mark.parametrize("max_features", [0, -1, None])
+@pytest.mark.parametrize("max_features", [0, -1])
 def test_fit_raises_when_max_features_invalid(max_features):
     n, p = 12, 5
     random_state = np.random.RandomState(0)
@@ -106,11 +107,8 @@ def test_fit_raises_when_max_features_invalid(max_features):
     y = random_state.normal(size=n)
 
     sel = FOCISelector(max_features=max_features)
-    expected = (
-        "The 'max_features' parameter of FOCISelector must be an "
-        "int in the range [1, inf)."
-    )
-    with pytest.raises(ValueError, match=re.escape(expected)):
+    expected = "The 'max_features' parameter of FOCISelector must be"
+    with pytest.raises(InvalidParameterError, match=re.escape(expected)):
         sel.fit(X, y)
 
 
