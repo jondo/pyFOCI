@@ -32,8 +32,9 @@ def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
 
 def test_default_stopping_and_transform():
     """
-    Default stopping at small n selects only a few variables, includes column index 3,
-    and transform returns the selected columns in the same order.
+    Default early stopping (min_delta=0) at small n selects only a few variables,
+    includes column index 3, and transform returns the selected columns in the
+    same order.
     """
     X_df, y = make_demo_data(n=300, p=40, seed=0)
 
@@ -60,9 +61,9 @@ def test_default_stopping_and_transform():
     assert_allclose(X_trans, expected)
 
 
-def test_stop_true_may_select_none_on_independent_data():
+def test_min_delta_zero_may_select_none_on_independent_data():
     """
-    With stop=True (default), on data where y is independent of X,
+    With min_delta=0 (default), on data where y is independent of X,
     the selector can select no features if the best initial Tn <= 0.
     """
     # Small dataset with y independent of X
@@ -70,23 +71,23 @@ def test_stop_true_may_select_none_on_independent_data():
     X = random_state.normal(size=(10, 1))
     y = random_state.normal(size=10)
 
-    selector = FOCISelector(random_state=0, stop=True).fit(X, y)
+    selector = FOCISelector(random_state=0, min_delta=0).fit(X, y)
 
     # With early stopping enabled, zero features may be selected
     assert selector.support_mask_.sum() == 0
     assert len(selector.Tn_path_) == 0
 
 
-def test_stop_false_ignores_early_stopping_and_selects_up_to_max():
+def test_min_delta_none_ignores_early_stopping_and_selects_up_to_max():
     """
-    With stop=False, early stopping is ignored and features are selected
+    With min_delta=None, early stopping is ignored and features are selected
     up to max_features even on independent data.
     """
     random_state = np.random.RandomState(0)
     X = random_state.normal(size=(20, 5))
     y = random_state.normal(size=20)
 
-    selector = FOCISelector(random_state=0, stop=False, max_features=3).fit(X, y)
+    selector = FOCISelector(random_state=0, min_delta=None, max_features=3).fit(X, y)
 
     assert selector.support_mask_.sum() == 3
     assert len(selector.Tn_path_) == 3
@@ -97,6 +98,24 @@ def test_fit_raises_when_y_is_none():
     sel = FOCISelector()
     with pytest.raises(ValueError, match="y must be provided"):
         sel.fit(X, y=None)
+
+
+def test_min_delta_enforces_gap():
+    """
+    With a positive min_delta, consecutive cumulative Tn values must improve
+    by more than min_delta; the first selected Tn must exceed min_delta.
+    """
+    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    min_delta = 0.03
+
+    selector = FOCISelector(random_state=0, min_delta=min_delta).fit(X_df, y)
+    tn = selector.Tn_path_
+    assert tn.size > 1  # precondition for testing a delta
+
+    assert tn[0] > min_delta
+
+    diffs = np.diff(tn)
+    assert np.all(diffs > min_delta)
 
 
 @pytest.mark.parametrize("max_features", [0, -1])

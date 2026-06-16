@@ -5,6 +5,8 @@ Feature Ordering by Conditional Independence (FOCI)
 # Authors: Robert Pollak <robert.pollak@jku.at>
 # License: BSD 3 clause
 
+from numbers import Real
+
 import numpy as np
 import sklearn.neighbors
 from sklearn.base import BaseEstimator, _fit_context
@@ -101,27 +103,38 @@ def _Tn(X_sub, y_rank, random_state):
 class FOCISelector(SelectorMixin, BaseEstimator):
     """
     Feature selector using hierarchical forward selection based on the
-    Azadkia-Chatterjee T_n coefficient.
+    Azadkia–Chatterjee T_n coefficient (see reference below).
 
     At each step, among remaining features, we choose the feature that maximizes
     the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}.
-
-    Stopping behavior is controlled by the `stop` flag:
-      - If stop=True, after the first scan, if the best T_n <= 0, no variable
-        is selected. At subsequent steps, if the best T_n does not improve
-        over the previous best, selection stops immediately.
-      - If stop=False, early stopping is ignored and features are selected
-        up to `max_features`, ordered by decreasing T_n at each step.
 
     Parameters
     ----------
     max_features : int or None, default=None
         Maximum number of features to select. If None, no hard cap is applied
-        and selection proceeds until early stopping (if `stop=True`) or until
-        all features are selected (if `stop=False`).
+        and selection proceeds until early stopping (if `min_delta` is not None)
+        or until all features are selected (if `min_delta` is None).
 
-    stop : bool, default=True
-        Whether to apply early stopping based on improvements in T_n.
+    min_delta : float or None, default=0
+        Minimum required improvement in the cumulative T_n to continue selecting.
+        Behavior:
+
+          - First step:
+            select a feature only if best_Tn > min_delta; otherwise, select none.
+          - Subsequent steps:
+            continue only if best_Tn > previous_best + min_delta; otherwise, stop.
+          - None disables early stopping (select up to `max_features`).
+
+        Notes:
+
+          - min_delta can be negative to relax stopping,
+            0 to reproduce standard early stopping,
+            and positive to require stricter improvement.
+
+        Compatibility with the reference implementation:
+
+          - min_delta == 0 corresponds to stop=TRUE
+          - min_delta is None corresponds to stop=FALSE
 
     random_state : int, RandomState instance or None, default=None
         Controls the random tie-breaking among nearest neighbors. Pass an int
@@ -141,17 +154,23 @@ class FOCISelector(SelectorMixin, BaseEstimator):
 
     Tn_path_ : ndarray of shape (n_selected,)
         Values of the cumulative T_n along the selection path.
+
+    References
+    ----------
+    Mona Azadkia and Sourav Chatterjee. A simple measure of conditional dependence.
+    The Annals of Statistics, 49(6):3070–3102, 2021. doi:10.1214/21-AOS2073
+    R FOCI package (reference implementation): https://cran.r-project.org/package=FOCI
     """
 
     _parameter_constraints = {
         "max_features": [None, Interval(Integral, 1, None, closed="left")],
-        "stop": [bool],
+        "min_delta": [None, Interval(Real, None, None, closed="neither")],
         "random_state": ["random_state"],
     }
 
-    def __init__(self, max_features=None, stop=True, random_state=None):
+    def __init__(self, max_features=None, min_delta=0, random_state=None):
         self.max_features = max_features
-        self.stop = stop
+        self.min_delta = min_delta
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
@@ -208,17 +227,17 @@ class FOCISelector(SelectorMixin, BaseEstimator):
                     best_Tn = Tn_val
                     best_j = j
 
-            # Early stopping behavior controlled by self.stop
-            if self.stop:
-                # First step: if best_Tn <= 0, select nothing and return
-                if len(selected) == 0 and best_Tn <= 0:
+            # Early stopping behavior controlled by self.min_delta
+            if self.min_delta is not None:
+                # First step: if best_Tn <= 0 + min_delta, select nothing and return
+                if len(selected) == 0 and best_Tn <= 0 + self.min_delta:
                     self.selected_indices_ = np.asarray([], dtype=int)
                     self.Tn_path_ = np.asarray([], dtype=float)
                     mask = np.zeros(n_features, dtype=bool)
                     self.support_mask_ = mask
                     return self
-                # Subsequent steps: stop if no improvement
-                if best_Tn <= Tn_prev:
+                # Subsequent steps: stop if no sufficient improvement
+                if len(selected) > 0 and best_Tn <= Tn_prev + self.min_delta:
                     break
 
             # Always add the best feature this round
