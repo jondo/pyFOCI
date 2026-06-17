@@ -74,3 +74,62 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the release and upload assets
+
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6   # needed so we can read CHANGELOG.md
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      - name: Extract CHANGELOG section for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract from "## [<version>]" until the next "## [" heading (or EOF).
+          # Tolerates trailing "- date" or no date, and pre-release suffixes.
+          awk -v ver="$VERSION" '
+            BEGIN { found = 0 }
+            /^## \[/ {
+              line = $0
+              sub(/^## \[/, "", line)
+              sub(/\].*$/, "", line)
+              if (line == ver) { found = 1 }
+              else if (found) { exit }
+            }
+            found { print }
+          ' CHANGELOG.md > release_body.md
+
+          if [ -s release_body.md ]; then
+            echo "CHANGELOG section found for $VERSION"
+            echo "body_path=release_body.md" >> "$GITHUB_OUTPUT"
+          else
+            echo "No CHANGELOG section for $VERSION — will use auto-generated notes"
+            rm -f release_body.md
+            echo "use_auto_notes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release (from CHANGELOG)
+        if: steps.changelog.outputs.body_path != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_body.md
+          files: dist/*
+
+      - name: Create release (auto-generated notes fallback)
+        if: steps.changelog.outputs.use_auto_notes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
