@@ -118,6 +118,15 @@ def test_min_delta_enforces_gap():
     assert np.all(diffs > min_delta)
 
 
+def test_standardize_none():
+    """
+    standardize=None is also accepted.
+    """
+    X_df, y = make_demo_data(n=100, p=10, seed=0)
+
+    FOCISelector(random_state=0, standardize=None).fit(X_df, y)
+
+
 @pytest.mark.parametrize("max_features", [0, -1])
 def test_fit_raises_when_max_features_invalid(max_features):
     n, p = 12, 5

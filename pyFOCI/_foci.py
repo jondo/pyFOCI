@@ -12,7 +12,12 @@ import sklearn.neighbors
 from sklearn.base import BaseEstimator, _fit_context
 from sklearn.feature_selection import SelectorMixin
 from sklearn.utils import check_random_state
-from sklearn.utils._param_validation import Integral, Interval, InvalidParameterError
+from sklearn.utils._param_validation import (
+    Integral,
+    Interval,
+    InvalidParameterError,
+    StrOptions,
+)
 from sklearn.utils.multiclass import type_of_target
 from sklearn.utils.validation import validate_data
 
@@ -136,6 +141,11 @@ class FOCISelector(SelectorMixin, BaseEstimator):
           - min_delta == 0 corresponds to stop=TRUE
           - min_delta is None corresponds to stop=FALSE
 
+    standardize : {"normalize", None}, default="normalize"
+        If "normalize", each column of X is standardized to zero mean and unit
+        variance before computing nearest neighbors. If None, X is used as-is.
+        Columns with zero variance are left unchanged.
+
     random_state : int, RandomState instance or None, default=None
         Controls the random tie-breaking among nearest neighbors. Pass an int
         for reproducible results across multiple calls. If None, the global
@@ -165,12 +175,16 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     _parameter_constraints = {
         "max_features": [None, Interval(Integral, 1, None, closed="left")],
         "min_delta": [None, Interval(Real, None, None, closed="neither")],
+        "standardize": [None, StrOptions({"normalize"})],
         "random_state": ["random_state"],
     }
 
-    def __init__(self, max_features=None, min_delta=0, random_state=None):
+    def __init__(
+        self, max_features=None, min_delta=0, standardize="normalize", random_state=None
+    ):
         self.max_features = max_features
         self.min_delta = min_delta
+        self.standardize = standardize
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
@@ -197,6 +211,15 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         X, y = validate_data(
             self, X, y, accept_sparse=False, y_numeric=True
         )  # asserts finite values
+
+        # Standardization (if requested)
+        if self.standardize == "normalize":
+            X_mean = np.mean(X, axis=0, dtype=float)
+            X_std = np.std(X, axis=0, dtype=float, ddof=0)
+            # Avoid division by zero: leave zero-variance columns unchanged
+            safe_std = X_std.copy()
+            safe_std[safe_std == 0] = 1.0
+            X = (X - X_mean) / safe_std
 
         n_samples, n_features = X.shape
         if n_samples < 2:
