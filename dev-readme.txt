@@ -6,6 +6,7 @@ Testing and merging:
 pixi run -e lint lint
 
 pixi run -e test test
+# Also examine the resulting coverage.xml.
 
 pixi run -e doc build-doc
 
