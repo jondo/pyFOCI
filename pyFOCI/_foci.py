@@ -108,7 +108,7 @@ def _Tn(X_sub, y_rank, random_state):
 class FOCISelector(SelectorMixin, BaseEstimator):
     """
     Feature selector using hierarchical forward selection based on the
-    Azadkia–Chatterjee T_n coefficient (see reference).
+    nonlinear Azadkia–Chatterjee T_n coefficient and its Fuchs form (see references).
 
     At each step, among remaining features, we choose the feature that maximizes
     the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}.
@@ -168,8 +168,12 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     References
     ----------
     Mona Azadkia and Sourav Chatterjee. A simple measure of conditional dependence.
-    The Annals of Statistics, 49(6):3070–3102, 2021. doi:10.1214/21-AOS2073
+    The Annals of Statistics, 49(6):3070–3102, 2021. https://doi.org/10.1214/21-AOS2073
+
     R FOCI package (reference implementation): https://cran.r-project.org/package=FOCI
+
+    Sebastian Fuchs. Quantifying directed dependence via dimension reduction.
+    Journal of Multivariate Analysis 201 (2024): 105266. https://doi.org/10.1016/j.jmva.2023.105266
     """
 
     _parameter_constraints = {
