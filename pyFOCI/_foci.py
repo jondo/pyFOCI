@@ -108,7 +108,7 @@ def _Tn(X_sub, y_rank, random_state):
 class FOCISelector(SelectorMixin, BaseEstimator):
     """
     Feature selector using hierarchical forward selection based on the
-    Azadkia–Chatterjee T_n coefficient (see reference below).
+    Azadkia–Chatterjee T_n coefficient (see reference).
 
     At each step, among remaining features, we choose the feature that maximizes
     the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}.
