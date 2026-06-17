@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Input features are now N(0,1)-normalized by default.
-  This can be switched off with the new parameter `standardize` by setting it to `Ǹone`.
+  This can be switched off with the new parameter `standardize` by setting it to `None`.
 
 ## [0.2.0] - 2026-06-16
 
