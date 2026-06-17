@@ -4,7 +4,7 @@
 API Reference
 #############
 
-This is an example on how to document the API of your own project.
+This is the full API documentation of the pyFOCI package.
 
 .. currentmodule:: pyFOCI
 
