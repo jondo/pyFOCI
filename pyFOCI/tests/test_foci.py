@@ -93,13 +93,6 @@ def test_min_delta_none_ignores_early_stopping_and_selects_up_to_max():
     assert len(selector.Tn_path_) == 3
 
 
-def test_fit_raises_when_y_is_none():
-    X = np.arange(10.0).reshape(-1, 1)
-    sel = FOCISelector()
-    with pytest.raises(ValueError, match="y must be provided"):
-        sel.fit(X, y=None)
-
-
 def test_min_delta_enforces_gap():
     """
     With a positive min_delta, consecutive cumulative Tn values must improve
@@ -125,6 +118,13 @@ def test_standardize_none():
     X_df, y = make_demo_data(n=100, p=10, seed=0)
 
     FOCISelector(random_state=0, standardize=None).fit(X_df, y)
+
+
+def test_fit_raises_when_y_is_none():
+    X = np.arange(10.0).reshape(-1, 1)
+    sel = FOCISelector()
+    with pytest.raises(ValueError, match="y must be provided"):
+        sel.fit(X, y=None)
 
 
 @pytest.mark.parametrize("max_features", [0, -1])
