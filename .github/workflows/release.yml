@@ -122,14 +122,14 @@ jobs:
 
       - name: Create release (from CHANGELOG)
         if: steps.changelog.outputs.body_path != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: release_body.md
           files: dist/*
 
       - name: Create release (auto-generated notes fallback)
         if: steps.changelog.outputs.use_auto_notes == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: dist/*
