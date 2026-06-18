@@ -33,6 +33,11 @@ git push origin main:main
 Releasing:
 ==========
 
-Following [Semantic Versioning](https://semver.org/), add a tag like "v0.1.2" to a commit and push it.
-A Github action will then publish this Release to PyPI.
+Select a version like `0.1.2`, following [Semantic Versioning](https://semver.org/).
+
+Update the changelog, commit with "Release 0.1.2".
+
+Tag the commit as "v0.1.2" and push it, including the tag.
+
+Github actions will then update the online docs and publish this release on Github and PyPI.
 
