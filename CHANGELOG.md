@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.2] - 2026-06-17
 
 ### Added
-- There is now a changelog, which is also used for the Github releases.
+- There is now a changelog, which is also used for the GitHub releases.
 
 ## [0.2.1] - 2026-06-17
 
