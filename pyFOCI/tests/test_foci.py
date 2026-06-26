@@ -167,3 +167,38 @@ def test_random_state_int_reproducible():
         selector_1.Tn_path_,
         selector_2.Tn_path_,
     )
+
+
+def test_nn_strategy_grouping_and_radius_are_accepted_and_reproducible():
+    X_df, y = make_demo_data(n=200, p=10, seed=0)
+
+    for strategy in ("grouping", "radius"):
+        selector_1 = FOCISelector(
+            random_state=0, nn_strategy=strategy, min_delta=None, max_features=3
+        ).fit(X_df, y)
+        selector_2 = FOCISelector(
+            random_state=0, nn_strategy=strategy, min_delta=None, max_features=3
+        ).fit(X_df, y)
+
+        # Non-trivial selection (avoid early stopping selecting none)
+        assert selector_1.support_mask_.sum() > 2
+
+        np.testing.assert_array_equal(
+            selector_1.selected_indices_,
+            selector_2.selected_indices_,
+        )
+        assert_allclose(
+            selector_1.Tn_path_,
+            selector_2.Tn_path_,
+        )
+
+
+def test_nn_strategy_invalid_raises():
+    random_state = np.random.RandomState(0)
+    X = random_state.normal(size=(20, 3))
+    y = random_state.normal(size=20)
+
+    sel = FOCISelector(nn_strategy="invalid")
+    expected = "The 'nn_strategy' parameter of FOCISelector must be"
+    with pytest.raises(InvalidParameterError, match=re.escape(expected)):
+        sel.fit(X, y)
