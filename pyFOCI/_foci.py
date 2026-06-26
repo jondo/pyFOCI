@@ -79,6 +79,48 @@ def _nn_radius_based(X_sub, random_state):
     return nbr_i
 
 
+def _nn_grouping_based(X_sub, random_state):
+    """Grouping-based NN selection with random tie-breaking."""
+    X_sub = np.asarray(X_sub)
+    n = X_sub.shape[0]
+    if n < 2:
+        raise ValueError("Need at least 2 samples.")
+
+    # 1) Group exactly identical rows
+    Xu, inv = np.unique(X_sub, axis=0, return_inverse=True)  # Xu: (m, p)
+    m = Xu.shape[0]
+
+    groups = [[] for _ in range(m)]
+    for i, g in enumerate(inv):
+        groups[g].append(i)
+    groups = [np.asarray(g, dtype=int) for g in groups]
+
+    nbr_i = np.empty(n, dtype=int)
+
+    for i in range(n):
+        gi = inv[i]
+        members = groups[gi]
+
+        # repeated data: choose another member of same group at random
+        if members.size >= 2:
+            choices = members[members != i]
+            nbr_i[i] = int(random_state.choice(choices))
+            continue
+
+        # per-query brute-force distances to all unique rows
+        diff = Xu - Xu[gi]  # (m, p)
+        d2 = (diff * diff).sum(axis=1)  # rowwise dot products
+        d2[gi] = np.inf  # exclude self
+
+        # Choose among all original indices whose (unique) row is at minimal distance
+        dmin = d2.min()
+        tied = np.flatnonzero(d2 == dmin)  # tied unique rows
+        candidates = np.concatenate([groups[u] for u in tied])
+        nbr_i[i] = int(random_state.choice(candidates))
+
+    return nbr_i
+
+
 def _Tn(X_sub, y_rank, random_state):
     """Compute :math:`T_n` following Fuchs (2024).
 
@@ -107,7 +149,7 @@ def _Tn(X_sub, y_rank, random_state):
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
 
-    nbr_i = _nn_radius_based(X_sub, random_state)
+    nbr_i = _nn_grouping_based(X_sub, random_state)
 
     # Apply the formula (indices are 0-based; y_rank is 1-based)
     term1 = np.sum(np.abs(y_rank - y_rank[nbr_i]))
