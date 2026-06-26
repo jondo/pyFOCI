@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Introduced an alternative nearest neighbors selection algorithm, similar to the R reference implementation.
+  It is exposed with the new keyword-only `FOCISelector` parameter `nn_strategy="grouping"`.
+  The original algorithm remains available with `nn_strategy="radius"`.
+
+## Changed
+- Made `nn_strategy="grouping"` the new default, because it is faster.
+
 ## [0.2.3] - 2026-06-23
 
 ### Changed
