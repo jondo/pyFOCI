@@ -9,6 +9,7 @@ pixi run -e test test
 # Also examine the resulting coverage.xml.
 
 pixi run -e doc build-doc
+# Also examine the resulting example plot.
 
 Commit to a dev branch.
 

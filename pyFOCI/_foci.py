@@ -51,33 +51,11 @@ def _rank_max(y):
     return ranks
 
 
-def _Tn(X_sub, y_rank, random_state):
-    """Compute :math:`T_n` following Fuchs (2024).
-
-    The implementation uses the expression for :math:`T_n` given in
-    Section 4.2 after "straightforward calculation" in:
-
-        Fuchs, Sebastian. "Quantifying directed dependence via dimension
-        reduction." Journal of Multivariate Analysis 201 (2024): 105266.
-
-    Parameters
-    ----------
-    X_sub : array-like of shape (n_samples, n_selected_features)
-        Candidate subset of the input features used to compute nearest
-        neighbors.
-    y_rank : ndarray of shape (n_samples,)
-        One-based ranks of the target values, typically computed with
-        :func:`_rank_max`.
-    random_state : numpy.random.RandomState
-        Random number generator used to break nearest-neighbor ties.
-
-    Returns
-    -------
-    Tn : float
-        Value of the :math:`T_n` statistic for ``X_sub`` and ``y_rank``.
-    """
+def _nn_radius_based(X_sub, random_state):
+    """Radius-based NN selection with random tie breaking."""
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
+
     # Fit NN on X_sub
     nbrs = sklearn.neighbors.NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
     nbrs.fit(X_sub)
@@ -97,6 +75,88 @@ def _Tn(X_sub, y_rank, random_state):
         # Remove self index if present
         neighbors = neighbors[neighbors != i]
         nbr_i[i] = random_state.choice(neighbors)
+
+    return nbr_i
+
+
+def _nn_grouping_based(X_sub, random_state):
+    """Grouping-based NN selection with random tie-breaking.
+
+    Precondition: n_samples >= 2.
+    """
+    X_sub = np.asarray(X_sub)
+    n = X_sub.shape[0]
+
+    # 1) Group exactly identical rows
+    Xu, inv = np.unique(X_sub, axis=0, return_inverse=True)  # Xu: (m, p)
+    m = Xu.shape[0]
+
+    groups = [[] for _ in range(m)]
+    for i, g in enumerate(inv):
+        groups[g].append(i)
+    groups = [np.asarray(g, dtype=int) for g in groups]
+
+    nbr_i = np.empty(n, dtype=int)
+
+    for i in range(n):
+        gi = inv[i]
+        members = groups[gi]
+
+        # repeated data: choose another member of same group at random
+        if members.size >= 2:
+            choices = members[members != i]
+            nbr_i[i] = int(random_state.choice(choices))
+            continue
+
+        # per-query brute-force distances to all unique rows
+        diff = Xu - Xu[gi]  # (m, p)
+        d2 = (diff * diff).sum(axis=1)  # rowwise dot products
+        d2[gi] = np.inf  # exclude self
+
+        # Choose among all original indices whose (unique) row is at minimal distance
+        dmin = d2.min()
+        tied = np.flatnonzero(d2 == dmin)  # tied unique rows
+        candidates = np.concatenate([groups[u] for u in tied])
+        nbr_i[i] = int(random_state.choice(candidates))
+
+    return nbr_i
+
+
+def _Tn(X_sub, y_rank, random_state, *, nn_strategy="grouping"):
+    """Compute :math:`T_n` following Fuchs (2024).
+
+    The implementation uses the expression for :math:`T_n` given in
+    Section 4.2 after "straightforward calculation" in:
+
+        Fuchs, Sebastian. "Quantifying directed dependence via dimension
+        reduction." Journal of Multivariate Analysis 201 (2024): 105266.
+
+    Parameters
+    ----------
+    X_sub : array-like of shape (n_samples, n_selected_features)
+        Candidate subset of the input features used to compute nearest
+        neighbors.
+    y_rank : ndarray of shape (n_samples,)
+        One-based ranks of the target values, typically computed with
+        :func:`_rank_max`.
+    random_state : numpy.random.RandomState
+        Random number generator used to break nearest-neighbor ties.
+    nn_strategy : {"grouping", "radius"}, default="grouping"
+        Strategy used to select the nearest neighbor indices.
+
+    Returns
+    -------
+    Tn : float
+        Value of the :math:`T_n` statistic for ``X_sub`` and ``y_rank``.
+    """
+    X_sub = np.asarray(X_sub)
+    n = X_sub.shape[0]
+
+    if nn_strategy == "grouping":
+        nbr_i = _nn_grouping_based(X_sub, random_state)
+    else:
+        assert nn_strategy == "radius"
+        nbr_i = _nn_radius_based(X_sub, random_state)
 
     # Apply the formula (indices are 0-based; y_rank is 1-based)
     term1 = np.sum(np.abs(y_rank - y_rank[nbr_i]))
@@ -146,6 +206,9 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         variance before computing nearest neighbors. If None, X is used as-is.
         Columns with zero variance are left unchanged.
 
+    nn_strategy : {"grouping", "radius"}, default="grouping"
+        Strategy used to select nearest neighbors for computing :math:`T_n`.
+
     random_state : int, RandomState instance or None, default=None
         Controls the random tie-breaking among nearest neighbors. Pass an int
         for reproducible results across multiple calls. If None, the global
@@ -180,15 +243,22 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         "max_features": [None, Interval(Integral, 1, None, closed="left")],
         "min_delta": [None, Interval(Real, None, None, closed="neither")],
         "standardize": [None, StrOptions({"normalize"})],
+        "nn_strategy": [StrOptions({"grouping", "radius"})],
         "random_state": ["random_state"],
     }
 
     def __init__(
-        self, max_features=None, min_delta=0, standardize="normalize", random_state=None
+        self,
+        max_features=None,
+        min_delta=0,
+        standardize="normalize",
+        nn_strategy="grouping",
+        random_state=None,
     ):
         self.max_features = max_features
         self.min_delta = min_delta
         self.standardize = standardize
+        self.nn_strategy = nn_strategy
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
@@ -249,7 +319,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             for j in remaining:
                 sel_candidate = selected + [j]
                 X_sub = X[:, sel_candidate]
-                Tn_val = _Tn(X_sub, y_rank, random_state)
+                Tn_val = _Tn(X_sub, y_rank, random_state, nn_strategy=self.nn_strategy)
                 if Tn_val > best_Tn:
                     best_Tn = Tn_val
                     best_j = j
