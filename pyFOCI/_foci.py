@@ -51,6 +51,34 @@ def _rank_max(y):
     return ranks
 
 
+def _nn_radius_based(X_sub, random_state):
+    """Radius-based NN selection with random tie breaking."""
+    X_sub = np.asarray(X_sub)
+    n = X_sub.shape[0]
+
+    # Fit NN on X_sub
+    nbrs = sklearn.neighbors.NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
+    nbrs.fit(X_sub)
+
+    # Get min distances
+    distances, _ = nbrs.kneighbors(n_neighbors=1)
+    min_distance = distances[:, 0]
+
+    eps = 1e-13  # to get all neighbors of min distance
+    # For each i, collect all min-dist neighbors, remove self, pick one at random
+    nbr_i = np.empty(n, dtype=int)
+    for i in range(n):
+        # Query neighbors in the tight radius around the nearest neighbor distance
+        neighbors = nbrs.radius_neighbors(
+            X_sub[i, :].reshape(1, -1), min_distance[i] + eps, return_distance=False
+        )[0]
+        # Remove self index if present
+        neighbors = neighbors[neighbors != i]
+        nbr_i[i] = random_state.choice(neighbors)
+
+    return nbr_i
+
+
 def _Tn(X_sub, y_rank, random_state):
     """Compute :math:`T_n` following Fuchs (2024).
 
@@ -78,25 +106,8 @@ def _Tn(X_sub, y_rank, random_state):
     """
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
-    # Fit NN on X_sub
-    nbrs = sklearn.neighbors.NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
-    nbrs.fit(X_sub)
 
-    # Get min distances
-    distances, _ = nbrs.kneighbors(n_neighbors=1)
-    min_distance = distances[:, 0]
-
-    eps = 1e-13  # to get all neighbors of min distance
-    # For each i, collect all min-dist neighbors, remove self, pick one at random
-    nbr_i = np.empty(n, dtype=int)
-    for i in range(n):
-        # Query neighbors in the tight radius around the nearest neighbor distance
-        neighbors = nbrs.radius_neighbors(
-            X_sub[i, :].reshape(1, -1), min_distance[i] + eps, return_distance=False
-        )[0]
-        # Remove self index if present
-        neighbors = neighbors[neighbors != i]
-        nbr_i[i] = random_state.choice(neighbors)
+    nbr_i = _nn_radius_based(X_sub, random_state)
 
     # Apply the formula (indices are 0-based; y_rank is 1-based)
     term1 = np.sum(np.abs(y_rank - y_rank[nbr_i]))
