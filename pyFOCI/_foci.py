@@ -80,11 +80,12 @@ def _nn_radius_based(X_sub, random_state):
 
 
 def _nn_grouping_based(X_sub, random_state):
-    """Grouping-based NN selection with random tie-breaking."""
+    """Grouping-based NN selection with random tie-breaking.
+
+    Precondition: n_samples >= 2.
+    """
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
-    if n < 2:
-        raise ValueError("Need at least 2 samples.")
 
     # 1) Group exactly identical rows
     Xu, inv = np.unique(X_sub, axis=0, return_inverse=True)  # Xu: (m, p)
