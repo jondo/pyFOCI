@@ -8,9 +8,9 @@ Feature Ordering by Conditional Independence (FOCI)
 from numbers import Real
 
 import numpy as np
-import sklearn.neighbors
 from sklearn.base import BaseEstimator, _fit_context
 from sklearn.feature_selection import SelectorMixin
+from sklearn.neighbors import NearestNeighbors
 from sklearn.utils import check_random_state
 from sklearn.utils._param_validation import (
     Integral,
@@ -57,7 +57,7 @@ def _nn_radius_based(X_sub, random_state):
     n = X_sub.shape[0]
 
     # Fit NN on X_sub
-    nbrs = sklearn.neighbors.NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
+    nbrs = NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
     nbrs.fit(X_sub)
 
     # Get min distances
