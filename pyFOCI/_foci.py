@@ -110,7 +110,7 @@ def _nn_grouping_based(X_sub, random_state):
 
         # per-query brute-force distances to all unique rows
         diff = Xu - Xu[gi]  # (m, p)
-        d2 = (diff * diff).sum(axis=1)  # rowwise dot products
+        d2 = (diff * diff).sum(axis=1, dtype=float)  # rowwise dot products
         d2[gi] = np.inf  # exclude self
 
         # Choose among all original indices whose (unique) row is at minimal distance
