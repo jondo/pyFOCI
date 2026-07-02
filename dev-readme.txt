@@ -3,9 +3,12 @@ Testing and merging:
 
 1. Locally:
 
+# On new Python release:
+pixi update
+
 pixi run -e lint lint
 
-pixi run -e test test
+pixi run -e latest test
 # Also examine the resulting coverage.xml.
 
 pixi run -e doc build-doc

@@ -13,23 +13,21 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
+        environment: [latest]
+        include:
+          - os: ubuntu-latest
+            environment: oldest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: prefix-dev/setup-pixi@v0.10.0
         with:
           pixi-version: v0.68.1
-          environments: test
+          environments: ${{ matrix.environment }}
           frozen: true
 
-      - name: Clear pixi cache and rebuild environment
-        shell: bash
-        run: |
-          rm -rf .pixi
-          pixi install
-
       - name: Run tests
-        run: pixi run -e test test
+        run: pixi run -e ${{ matrix.environment }} test
 
       - name: Upload coverage reports to Codecov
         if: matrix.os == 'ubuntu-latest'

@@ -11,7 +11,7 @@ authors = [
 description = "A template for scikit-learn compatible packages."
 readme = "README.md"
 license = "BSD-3-Clause"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 dependencies = [
   "scikit-learn==1.8",
   "numpy",
@@ -19,6 +19,8 @@ dependencies = [
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: POSIX",
     "Operating System :: Unix",
     "Operating System :: MacOS",
@@ -42,13 +44,19 @@ channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
-python = ">=3.12,<3.13"
+python = ">=3.12"
 scikit-learn = "==1.8"
 numpy = "*"
 pandas = "*"
 openblas = "*"
 python-build = "*"
 twine = "*"
+
+[tool.pixi.feature.py312.dependencies]
+python = "3.12.*"
+
+[tool.pixi.feature.latest.dependencies]
+python = "*" # This will pick the highest version available in the channel
 
 [tool.pixi.pypi-dependencies]
 pyFOCI = { path=".", editable=true }
@@ -87,7 +95,8 @@ build-doc = { cmd = "make clean html", cwd = "doc" }
 [tool.pixi.environments]
 doc = ["doc"]
 lint = ["lint"]
-test = ["test"]
+oldest = ["py312", "test"]
+latest = ["latest", "test"]
 dev = ["doc", "lint", "test"]
 
 [tool.pixi.tasks]
