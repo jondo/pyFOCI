@@ -1,7 +1,7 @@
 """
-=================================================
-Selectors compared on nonlinear redundant dataset
-=================================================
+===================================
+FOCI vs others on synthetic dataset
+===================================
 
 This example creates a small additive nonlinear synthetic dataset with redundant
 distractor features to demonstrate how Feature Ordering by Conditional Independence
@@ -190,7 +190,7 @@ ax_time.bar(
     alpha=0.7,
 )
 
-ax.set_title("Downstream R² vs Runtime")
+ax.set_title("Selected-feature utility vs Runtime")
 ax.set_xticks(x_pos)
 ax.set_xticklabels(names, rotation=20, ha="right")
 ax.set_ylabel("Test R² Score", color="tab:purple", fontweight="bold")
