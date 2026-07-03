@@ -89,6 +89,7 @@ def _nn_grouping_based(X_sub, random_state):
 
     # 1) Group exactly identical rows
     Xu, inv = np.unique(X_sub, axis=0, return_inverse=True)  # Xu: (m, p)
+    # inv maps each sample to its "identical-row group" index in [0, m)
     m = Xu.shape[0]
 
     groups = [[] for _ in range(m)]
@@ -97,6 +98,42 @@ def _nn_grouping_based(X_sub, random_state):
     groups = [np.asarray(g, dtype=int) for g in groups]
 
     nbr_i = np.empty(n, dtype=int)
+
+    # ---- Case A: only one unique row (all rows identical) ----
+    if m == 1:
+        group = groups[0]  # all indices, size n>=2
+        for sample_idx in range(n):
+            choices = group[group != sample_idx]
+            nbr_i[sample_idx] = int(random_state.choice(choices))
+        return nbr_i
+
+    # NN structure on unique rows
+    nn = NearestNeighbors(algorithm="auto")
+    nn.fit(Xu)
+
+    # ---- Case B: exactly two unique rows ----
+    if m == 2:
+        # Only one non-self neighbor exists for each unique row
+        nn_dist, nn_idx = nn.kneighbors(n_neighbors=1, return_distance=True)  # (2, 1)
+
+        for sample_idx in range(n):
+            group_idx = inv[sample_idx]
+            group = groups[group_idx]
+
+            # repeated data: choose another member of same group at random
+            if group.size >= 2:
+                choices = group[group != sample_idx]
+                nbr_i[sample_idx] = int(random_state.choice(choices))
+                continue
+
+            nn_group_idx = int(nn_idx[group_idx, 0])
+            nbr_i[sample_idx] = int(random_state.choice(groups[nn_group_idx]))
+
+        return nbr_i
+
+    # ---- Case C: three or more unique rows ----
+    # Ask for the 2 nearest (non-self) unique rows to detect distance ties
+    nn_dist, nn_idx = nn.kneighbors(n_neighbors=2, return_distance=True)  # (m, 2)
 
     for sample_idx in range(n):
         group_idx = inv[sample_idx]
@@ -108,15 +145,23 @@ def _nn_grouping_based(X_sub, random_state):
             nbr_i[sample_idx] = int(random_state.choice(choices))
             continue
 
-        # per-query brute-force distances to all unique rows
-        diff = Xu - Xu[group_idx]  # (m, p)
-        d2 = (diff * diff).sum(axis=1, dtype=float)  # rowwise dot products
-        d2[group_idx] = np.inf  # exclude self
+        # Detect whether the minimal distance is tied
+        d1, d2 = nn_dist[group_idx, 0], nn_dist[group_idx, 1]
 
-        # Choose among all original indices whose (unique) row is at minimal distance
-        dmin = d2.min()
-        tied_group_idx = np.flatnonzero(d2 == dmin)  # tied unique rows
-        candidates = np.concatenate([groups[u] for u in tied_group_idx])
+        if d2 > d1:
+            # unique nearest unique row
+            nn_group_idx = int(nn_idx[group_idx, 0])
+            candidates = groups[nn_group_idx]
+        else:
+            # tie at the minimum distance -> brute-force only for this group_idx
+            diff = Xu - Xu[group_idx]  # (m, p)
+            d2_all = (diff * diff).sum(axis=1, dtype=float)  # rowwise dot products
+            d2_all[group_idx] = np.inf  # exclude self
+
+            dmin2 = d2_all.min()
+            tied_group_idx = np.flatnonzero(d2_all == dmin2)  # tied unique rows
+            candidates = np.concatenate([groups[u] for u in tied_group_idx])
+
         nbr_i[sample_idx] = int(random_state.choice(candidates))
 
     return nbr_i
