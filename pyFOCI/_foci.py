@@ -92,32 +92,32 @@ def _nn_grouping_based(X_sub, random_state):
     m = Xu.shape[0]
 
     groups = [[] for _ in range(m)]
-    for i, g in enumerate(inv):
-        groups[g].append(i)
+    for sample_idx, group_idx in enumerate(inv):
+        groups[group_idx].append(sample_idx)
     groups = [np.asarray(g, dtype=int) for g in groups]
 
     nbr_i = np.empty(n, dtype=int)
 
-    for i in range(n):
-        gi = inv[i]
-        members = groups[gi]
+    for sample_idx in range(n):
+        group_idx = inv[sample_idx]
+        group = groups[group_idx]
 
         # repeated data: choose another member of same group at random
-        if members.size >= 2:
-            choices = members[members != i]
-            nbr_i[i] = int(random_state.choice(choices))
+        if group.size >= 2:
+            choices = group[group != sample_idx]
+            nbr_i[sample_idx] = int(random_state.choice(choices))
             continue
 
         # per-query brute-force distances to all unique rows
-        diff = Xu - Xu[gi]  # (m, p)
+        diff = Xu - Xu[group_idx]  # (m, p)
         d2 = (diff * diff).sum(axis=1, dtype=float)  # rowwise dot products
-        d2[gi] = np.inf  # exclude self
+        d2[group_idx] = np.inf  # exclude self
 
         # Choose among all original indices whose (unique) row is at minimal distance
         dmin = d2.min()
-        tied = np.flatnonzero(d2 == dmin)  # tied unique rows
-        candidates = np.concatenate([groups[u] for u in tied])
-        nbr_i[i] = int(random_state.choice(candidates))
+        tied_group_idx = np.flatnonzero(d2 == dmin)  # tied unique rows
+        candidates = np.concatenate([groups[u] for u in tied_group_idx])
+        nbr_i[sample_idx] = int(random_state.choice(candidates))
 
     return nbr_i
 
