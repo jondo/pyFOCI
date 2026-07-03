@@ -9,7 +9,7 @@ distractor features to demonstrate how Feature Ordering by Conditional Independe
 Scikit-Learn feature selectors.
 
 Univariate feature selectors (SelectKBest) evaluate features marginally, ranking
-redundant collinear features equally high. LASSO is a (sparse) linear method,
+redundant collinear features equally high. Lasso is a (sparse) linear method,
 therefore does not work well on strongly nonlinear data, similar to Recursive Feature
 Elimination (RFE) with a linear model, which also cannot deal well with collinear
 features. Tree-based RFE works better, but is much slower and still dilutes split
