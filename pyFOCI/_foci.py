@@ -79,6 +79,31 @@ def _nn_radius_based(X_sub, random_state):
     return nbr_i
 
 
+def _pick_other_in_same_group(group, sample_idx, random_state):
+    """Pick a random index from `group` that is not `sample_idx`.
+
+    Returns None if the group has no alternative member.
+    """
+    if group.size < 2:
+        return None
+    choices = group[group != sample_idx]
+    return int(random_state.choice(choices))
+
+
+def _tied_min_distance_candidates(group_idx, Xu, groups):
+    """Return candidate sample indices from all unique rows tied at minimal distance.
+
+    Excludes the self unique row at `group_idx`.
+    """
+    diff = Xu - Xu[group_idx]  # (m, p)
+    d2_all = (diff * diff).sum(axis=1, dtype=float)  # squared distances
+    d2_all[group_idx] = np.inf  # exclude self
+
+    dmin2 = d2_all.min()
+    tied_group_idx = np.flatnonzero(d2_all == dmin2)  # tied unique rows
+    return np.concatenate([groups[u] for u in tied_group_idx])
+
+
 def _nn_grouping_based(X_sub, random_state):
     """Grouping-based NN selection with random tie-breaking.
 
@@ -103,64 +128,38 @@ def _nn_grouping_based(X_sub, random_state):
     if m == 1:
         group = groups[0]  # all indices, size n>=2
         for sample_idx in range(n):
-            choices = group[group != sample_idx]
-            nbr_i[sample_idx] = int(random_state.choice(choices))
+            nbr_i[sample_idx] = _pick_other_in_same_group(
+                group, sample_idx, random_state
+            )
         return nbr_i
 
     # NN structure on unique rows
     nn = NearestNeighbors(algorithm="auto")
     nn.fit(Xu)
 
-    # ---- Case B: exactly two unique rows ----
-    if m == 2:
-        # Only one non-self neighbor exists for each unique row
-        nn_dist, nn_idx = nn.kneighbors(n_neighbors=1, return_distance=True)  # (2, 1)
+    # For m==2: only one non-self neighbor exists for each unique row
+    # For m>=3: ask for the 2 nearest (non-self) unique rows to detect distance ties
+    n_neighbors = 1 if m == 2 else 2
+    nn_dist, nn_idx = nn.kneighbors(n_neighbors=n_neighbors, return_distance=True)
 
-        for sample_idx in range(n):
-            group_idx = inv[sample_idx]
-            group = groups[group_idx]
-
-            # repeated data: choose another member of same group at random
-            if group.size >= 2:
-                choices = group[group != sample_idx]
-                nbr_i[sample_idx] = int(random_state.choice(choices))
-                continue
-
-            nn_group_idx = int(nn_idx[group_idx, 0])
-            nbr_i[sample_idx] = int(random_state.choice(groups[nn_group_idx]))
-
-        return nbr_i
-
-    # ---- Case C: three or more unique rows ----
-    # Ask for the 2 nearest (non-self) unique rows to detect distance ties
-    nn_dist, nn_idx = nn.kneighbors(n_neighbors=2, return_distance=True)  # (m, 2)
-
+    # ---- Cases B/C: two or more unique rows ----
     for sample_idx in range(n):
         group_idx = inv[sample_idx]
         group = groups[group_idx]
 
-        # repeated data: choose another member of same group at random
-        if group.size >= 2:
-            choices = group[group != sample_idx]
-            nbr_i[sample_idx] = int(random_state.choice(choices))
+        same_group_pick = _pick_other_in_same_group(group, sample_idx, random_state)
+        if same_group_pick is not None:
+            nbr_i[sample_idx] = same_group_pick
             continue
 
-        # Detect whether the minimal distance is tied
-        d1, d2 = nn_dist[group_idx, 0], nn_dist[group_idx, 1]
+        unique_nn = (m == 2) or (nn_dist[group_idx, 1] > nn_dist[group_idx, 0])
 
-        if d2 > d1:
-            # unique nearest unique row
+        if unique_nn:
             nn_group_idx = int(nn_idx[group_idx, 0])
             candidates = groups[nn_group_idx]
         else:
             # tie at the minimum distance -> brute-force only for this group_idx
-            diff = Xu - Xu[group_idx]  # (m, p)
-            d2_all = (diff * diff).sum(axis=1, dtype=float)  # rowwise dot products
-            d2_all[group_idx] = np.inf  # exclude self
-
-            dmin2 = d2_all.min()
-            tied_group_idx = np.flatnonzero(d2_all == dmin2)  # tied unique rows
-            candidates = np.concatenate([groups[u] for u in tied_group_idx])
+            candidates = _tied_min_distance_candidates(group_idx, Xu, groups)
 
         nbr_i[sample_idx] = int(random_state.choice(candidates))
 
