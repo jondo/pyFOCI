@@ -13,7 +13,9 @@ readme = "README.md"
 license = "BSD-3-Clause"
 requires-python = ">=3.12"
 dependencies = [
-  "scikit-learn==1.8",
+  # scikit-learn 1.6 is the first release with `__sklearn_tags__` and
+  # `validate_data`, both used by this package.
+  "scikit-learn>=1.6",
   "numpy",
 ]
 classifiers = [
@@ -45,7 +47,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
 python = ">=3.12"
-scikit-learn = "==1.8"
+scikit-learn = "*"
 numpy = "*"
 pandas = "*"
 openblas = "*"
@@ -54,6 +56,8 @@ twine = "*"
 
 [tool.pixi.feature.py312.dependencies]
 python = "3.12.*"
+# Pin the oldest supported scikit-learn
+scikit-learn = "==1.6"
 
 [tool.pixi.feature.latest.dependencies]
 python = "*" # This will pick the highest version available in the channel
