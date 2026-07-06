@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.1] - 2026-07-03
 
 ### Added
-- The documentation now contains an example comparing FOCI with some Scikit-Learn Feature selectors
+- The documentation now contains an example comparing FOCI with some scikit-learn feature selectors
   on a small artificial redundant nonlinear dataset.
 
 ### Changed
-- The default Nearest Neighbors strategy `nn_strategy="grouping"` is now
+- The default nearest neighbors strategy `nn_strategy="grouping"` is now
   faster than quadratic in the number of unique rows.
 
 ## [0.3.0] - 2026-06-26
