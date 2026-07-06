@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The default nearest neighbors strategy `nn_strategy="grouping"` is now
   faster than quadratic in the number of unique rows.
+- Removed the restriction to Python < 3.13.
 
 ## [0.3.0] - 2026-06-26
 
