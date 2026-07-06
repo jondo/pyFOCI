@@ -45,7 +45,8 @@ Select a version like `0.1.2`, following [Semantic Versioning](https://semver.or
 
 Update the changelog, commit with "Release 0.1.2".
 
-Tag the commit as "v0.1.2" and push it, including the tag.
+# Tag the commit as "v0.1.2" and push it, including the tag:
+git push origin main:main v0.1.2
 
 Check the GitHub and PyPI release pages.
 
