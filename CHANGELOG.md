@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Introduced an alternative method to deal with nearest neighbor ties:
+  Instead of selecting one of the tied neighbors randomly, then using its `y_rank`,
+  one can now switch to deterministically using the mean `y_rank` of all tied neighbors instead.
+  For this, the new keyword-only `FOCISelector` parameter `nn_tie_breaking` is introduced,
+  with default value `"random"` for the usual behavior, and value `"mean"` for the
+  new deterministic tie breaking.
+
 ## [0.3.2]
 
 ### Added

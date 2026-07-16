@@ -12,7 +12,7 @@ from sklearn.utils._param_validation import InvalidParameterError
 from sklearn.utils._testing import assert_allclose
 
 from pyFOCI import FOCISelector
-from pyFOCI._foci import _nn_grouping_based, _nn_radius_based
+from pyFOCI._foci import _nn_grouping_based, _nn_radius_based, _Tn
 
 
 def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
@@ -29,6 +29,31 @@ def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
         + X_df.iloc[:, 3] ** 2
     )
     return X_df, y.to_numpy()
+
+
+def collect_nn_ties(nn_func, X):
+    """
+    Collect nearest-neighbor tie sets produced by an NN traversal helper.
+
+    The NN helper API aggregates each tie set immediately and returns the
+    aggregated values. These tests still need to inspect the tie sets directly,
+    so this helper uses a test-only aggregator that records each tie set and
+    returns a dummy scalar aggregation value.
+    """
+    nn_ties_by_sample = []
+
+    def record_ties(nn_ties):
+        nn_ties_by_sample.append(np.asarray(nn_ties, dtype=int).copy())
+        return 0.0
+
+    aggregated = nn_func(X, record_ties)
+
+    assert isinstance(aggregated, np.ndarray)
+    assert aggregated.shape == (np.asarray(X).shape[0],)
+    assert aggregated.dtype.kind == "f"
+    assert len(nn_ties_by_sample) == np.asarray(X).shape[0]
+
+    return nn_ties_by_sample
 
 
 def test_default_stopping_and_transform():
@@ -216,21 +241,23 @@ def test_nn_grouping_based_no_ties():
     # idx 2 (val 12) -> closest is 10 (idx 1)
     # idx 3 (val 30) -> closest is 12 (idx 2)
     X = np.array([[0], [10], [12], [30]])
-    random_state = np.random.RandomState(0)
-    nbr_i = _nn_grouping_based(X, random_state)
+    nn_ties = collect_nn_ties(_nn_grouping_based, X)
 
-    expected = np.array([1, 2, 1, 2])
-    np.testing.assert_array_equal(nbr_i, expected)
+    expected = [np.array([1]), np.array([2]), np.array([1]), np.array([2])]
+    assert len(nn_ties) == len(expected)
+    for got, exp in zip(nn_ties, expected):
+        np.testing.assert_array_equal(got, exp)
 
-    # Also verify that no point selects itself as neighbor
-    assert not np.any(nbr_i == np.arange(len(X)))
+    # Also verify that no point includes itself as a tied neighbor
+    for i, ties in enumerate(nn_ties):
+        assert i not in set(ties.tolist())
 
 
 def test_nn_grouping_based_identical_rows_pair():
     """
     Test _nn_grouping_based when there is an exact pair of identical rows.
-    Identical rows have distance 0 between each other and must mutually select
-    each other.
+    Identical rows have distance 0 between each other and must list each other
+    as the (only) member of their tie sets.
     """
     # Indices 0 and 2 are identical [1.0, 2.0]
     X = np.array(
@@ -241,37 +268,35 @@ def test_nn_grouping_based_identical_rows_pair():
             [10.0, 10.0],  # idx 3
         ]
     )
-    random_state = np.random.RandomState(0)
-    nbr_i = _nn_grouping_based(X, random_state)
+    nn_ties = collect_nn_ties(_nn_grouping_based, X)
 
-    # Since idx 0 and idx 2 are identical, distance is 0 -> select each other
-    assert nbr_i[0] == 2
-    assert nbr_i[2] == 0
+    np.testing.assert_array_equal(nn_ties[0], np.array([2]))
+    np.testing.assert_array_equal(nn_ties[2], np.array([0]))
     # For idx 3 [10, 10], closest unique row is [5, 5] (idx 1)
-    assert nbr_i[3] == 1
+    np.testing.assert_array_equal(nn_ties[3], np.array([1]))
 
 
 def test_nn_grouping_based_identical_rows_multiple():
     """
     Test _nn_grouping_based when there are 3 or more identical rows.
-    Ties within the identical group must be broken randomly without any
-    sample selecting itself.
+
+    For samples in the identical group, the tie set is all other members of that
+    group. No random tie-breaking happens in _nn_grouping_based.
     """
     # 4 identical rows [7], 1 distinct row [100]
     X = np.array([[7], [7], [7], [7], [100]])
-    random_state = np.random.RandomState(0)
-    nbr_i = _nn_grouping_based(X, random_state)
+    nn_ties = collect_nn_ties(_nn_grouping_based, X)
 
-    # For rows 0..3, nearest neighbors must be within {0, 1, 2, 3} \ {i}
-    for i in range(4):
-        assert nbr_i[i] in {0, 1, 2, 3}
-        assert nbr_i[i] != i
-
-    # Verify tie-breaking selects varied members across the identical group
-    assert len(set(nbr_i[:4])) > 1
-
-    # For row 4 (value 100), closest unique row has indices {0, 1, 2, 3}
-    assert nbr_i[4] in {0, 1, 2, 3}
+    expected = [
+        np.array([1, 2, 3]),
+        np.array([0, 2, 3]),
+        np.array([0, 1, 3]),
+        np.array([0, 1, 2]),
+        np.array([0, 1, 2, 3]),
+    ]
+    assert len(nn_ties) == len(expected)
+    for got, exp in zip(nn_ties, expected):
+        np.testing.assert_array_equal(got, exp)
 
 
 def test_nn_grouping_based_distance_ties():
@@ -281,11 +306,10 @@ def test_nn_grouping_based_distance_ties():
     """
     # In 1D: row 0 (val 0) is equidistant to row 1 (val -3) and row 2 (val 3)
     X_1d = np.array([[0], [-3], [3]])
-    random_state = np.random.RandomState(0)
-    nbr_1d = _nn_grouping_based(X_1d, random_state)
+    nn_1d = collect_nn_ties(_nn_grouping_based, X_1d)
 
-    assert nbr_1d[0] in {1, 2}
-    assert nbr_1d[0] != 0
+    np.testing.assert_array_equal(np.sort(nn_1d[0]), np.array([1, 2]))
+    assert 0 not in set(nn_1d[0].tolist())
 
     # In 2D: row 0 is at (0, 0), surrounded by 4 points at Euclidean distance 1;
     # row 5 is at (10, 10), surrounded by 4 points at Euclidean distance 1.
@@ -303,13 +327,10 @@ def test_nn_grouping_based_distance_ties():
             [10, 9],
         ]
     )
-    random_state = np.random.RandomState(0)
-    nbr_2d = _nn_grouping_based(X_2d, random_state)
+    nn_2d = collect_nn_ties(_nn_grouping_based, X_2d)
 
-    assert nbr_2d[0] in {1, 2, 3, 4}
-    assert nbr_2d[5] in {6, 7, 8, 9}
-    # Verify tie-breaking selects distinct relative neighbors across query points
-    assert (nbr_2d[0] - 0) != (nbr_2d[5] - 5)
+    np.testing.assert_array_equal(np.sort(nn_2d[0]), np.array([1, 2, 3, 4]))
+    np.testing.assert_array_equal(np.sort(nn_2d[5]), np.array([6, 7, 8, 9]))
 
 
 def test_nn_grouping_based_combined_ties_and_identical_rows():
@@ -328,22 +349,22 @@ def test_nn_grouping_based_combined_ties_and_identical_rows():
             [-2],  # idx 3
         ]
     )
-    random_state = np.random.RandomState(0)
-    nbr_i = _nn_grouping_based(X, random_state)
+    nn_ties = collect_nn_ties(_nn_grouping_based, X)
 
     # Candidate indices for row 0 are {1, 2, 3}
-    assert nbr_i[0] in {1, 2, 3}
-    # Since idx 1 and 2 are identical, they must select each other
-    assert nbr_i[1] == 2
-    assert nbr_i[2] == 1
+    np.testing.assert_array_equal(np.sort(nn_ties[0]), np.array([1, 2, 3]))
+
+    # Since idx 1 and 2 are identical, their tie sets are each other
+    np.testing.assert_array_equal(nn_ties[1], np.array([2]))
+    np.testing.assert_array_equal(nn_ties[2], np.array([1]))
+
     # For idx 3 [-2], closest is [0] (idx 0)
-    assert nbr_i[3] == 0
+    np.testing.assert_array_equal(nn_ties[3], np.array([0]))
 
 
-def test_nn_grouping_based_reproducibility():
+def test_nn_grouping_based_deterministic():
     """
-    Test that _nn_grouping_based yields reproducible neighbor assignments
-    for the same seed, even with distance ties and identical rows.
+    Test that _nn_grouping_based is deterministic and does not depend on a RNG.
     """
     X = np.array(
         [
@@ -359,52 +380,155 @@ def test_nn_grouping_based_reproducibility():
         ]
     )
 
-    nbr_i_1 = _nn_grouping_based(X, random_state=np.random.RandomState(0))
-    nbr_i_2 = _nn_grouping_based(X, random_state=np.random.RandomState(0))
+    nn_ties_1 = collect_nn_ties(_nn_grouping_based, X)
+    nn_ties_2 = collect_nn_ties(_nn_grouping_based, X)
 
-    np.testing.assert_array_equal(nbr_i_1, nbr_i_2)
-    assert not np.any(nbr_i_1 == np.arange(len(X)))
+    assert len(nn_ties_1) == len(nn_ties_2)
+    for t1, t2 in zip(nn_ties_1, nn_ties_2):
+        np.testing.assert_array_equal(np.sort(t1), np.sort(t2))
+
+    for i, ties in enumerate(nn_ties_1):
+        assert i not in set(ties.tolist())
 
 
 def test_nn_grouping_based_all_identical_rows():
     """
     Test behavior when all samples in X are identical.
-    Each sample should pick a random neighbor among all other samples.
+    Each sample should list all other samples as its tie set.
     """
     n = 10
     X = np.ones((n, 3))
-    random_state = np.random.RandomState(0)
-    nbr_i = _nn_grouping_based(X, random_state)
+    nn_ties = collect_nn_ties(_nn_grouping_based, X)
 
-    assert nbr_i.shape == (n,)
-    assert not np.any(nbr_i == np.arange(n))
-    assert np.all((nbr_i >= 0) & (nbr_i < n))
-    assert len(set(nbr_i)) > 1
+    assert len(nn_ties) == n
+    for i in range(n):
+        np.testing.assert_array_equal(
+            nn_ties[i], np.array([j for j in range(n) if j != i])
+        )
 
 
 def test_nn_grouping_based_matches_radius_based_no_ties():
     """
     On random continuous data without ties or identical rows, grouping-based
-    and radius-based NN selection should yield identical assignments.
+    and radius-based NN tie sets should match and be singletons.
     """
     random_state = np.random.RandomState(0)
     X = random_state.normal(size=(50, 5))
 
-    nbr_grouping = _nn_grouping_based(X, random_state=np.random.RandomState(0))
-    nbr_radius = _nn_radius_based(X, random_state=np.random.RandomState(0))
+    nn_grouping = collect_nn_ties(_nn_grouping_based, X)
+    nn_radius = collect_nn_ties(_nn_radius_based, X)
 
-    np.testing.assert_array_equal(nbr_grouping, nbr_radius)
+    assert len(nn_grouping) == len(nn_radius)
+    for g, r in zip(nn_grouping, nn_radius):
+        np.testing.assert_array_equal(g, r)
+        assert g.shape == (1,)
 
 
 def test_nn_grouping_based_two_samples():
     """
     Test minimal sample size (n_samples == 2).
-    With only 2 samples, index 0 must select 1 and index 1 must select 0,
-    regardless of whether they are distinct or identical.
+    With only 2 samples, index 0's tie set must be [1] and index 1's tie set must
+    be [0], regardless of whether they are distinct or identical.
     """
     X_distinct = np.array([[10], [20]])
     X_identical = np.array([[5], [5]])
 
+    nn_distinct = collect_nn_ties(_nn_grouping_based, X_distinct)
+    nn_identical = collect_nn_ties(_nn_grouping_based, X_identical)
+
+    np.testing.assert_array_equal(nn_distinct[0], np.array([1]))
+    np.testing.assert_array_equal(nn_distinct[1], np.array([0]))
+    np.testing.assert_array_equal(nn_identical[0], np.array([1]))
+    np.testing.assert_array_equal(nn_identical[1], np.array([0]))
+
+
+@pytest.mark.parametrize("nn_func", [_nn_grouping_based, _nn_radius_based])
+def test_nn_helpers_return_aggregated_values(nn_func):
+    """
+    NN helpers should return one scalar aggregation result per sample.
+
+    The aggregator receives each sample's nearest-neighbor tie set and returns
+    the number of tied nearest neighbors. The helper should collect these
+    returned scalar values in an ndarray.
+    """
+    X = np.array([[0.0], [-1.0], [1.0]])
+
+    aggregated = nn_func(X, lambda nn_ties: float(len(nn_ties)))
+
+    assert aggregated.shape == (X.shape[0],)
+    assert aggregated.dtype.kind == "f"
+
+    # sample 0 has two equidistant nearest neighbors; samples 1 and 2 each have
+    # one nearest neighbor.
+    np.testing.assert_array_equal(aggregated, np.array([2.0, 1.0, 1.0]))
+
+
+def test_nn_grouping_based_returns_aggregated_values_for_identical_rows():
+    """
+    _nn_grouping_based should aggregate identical-row tie sets immediately.
+
+    In this dataset:
+      - samples 0, 1, and 2 are identical, so each has two tied neighbors
+      - sample 3 has the identical-row group as nearest neighbors, so it has
+        three tied neighbors
+    """
+    X = np.array([[1.0], [1.0], [1.0], [5.0]])
+
+    aggregated = _nn_grouping_based(X, lambda nn_ties: float(len(nn_ties)))
+
+    np.testing.assert_array_equal(aggregated, np.array([2.0, 2.0, 2.0, 3.0]))
+
+
+def test_Tn_invalid_tie_breaking_raises():
+    X = np.array([[0.0], [1.0], [2.0]])
+    y_rank = np.array([1.0, 2.0, 3.0])
     random_state = np.random.RandomState(0)
-    np.testing.assert_array_equal(_nn_grouping_based(X_distinct, random_state), [1, 0])
-    np.testing.assert_array_equal(_nn_grouping_based(X_identical, random_state), [1, 0])
+
+    with pytest.raises(ValueError, match=re.escape("nn_tie_breaking must be one of")):
+        _Tn(
+            X,
+            y_rank,
+            random_state,
+            nn_strategy="grouping",
+            nn_tie_breaking="invalid",
+        )
+
+
+def test_Tn_mean_tie_breaking_grouping():
+    """
+    Cover nn_tie_breaking="mean" on a dataset with a true distance tie.
+
+    For X = [[0], [-1], [1]]:
+      - sample 0 has two nearest neighbors at equal distance: indices {1, 2}
+      - using mean tie-breaking sets neighbor rank for sample 0 to mean([2, 3]) = 2.5
+    """
+    X = np.array([[0.0], [-1.0], [1.0]])
+    y_rank = np.array([1.0, 2.0, 3.0])
+    random_state = np.random.RandomState(0)
+
+    tn = _Tn(
+        X,
+        y_rank,
+        random_state,
+        nn_strategy="grouping",
+        nn_tie_breaking="mean",
+    )
+    assert np.isfinite(tn)
+
+
+def test_Tn_mean_tie_breaking_radius():
+    """
+    Cover nn_strategy="radius" together with nn_tie_breaking="mean".
+    """
+    X = np.array([[0.0], [-1.0], [1.0]])
+    y_rank = np.array([1.0, 2.0, 3.0])
+    random_state = np.random.RandomState(0)
+
+    tn = _Tn(
+        X,
+        y_rank,
+        random_state,
+        nn_strategy="radius",
+        nn_tie_breaking="mean",
+    )
+    assert np.isfinite(tn)

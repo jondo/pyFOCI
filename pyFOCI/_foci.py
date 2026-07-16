@@ -51,10 +51,29 @@ def _rank_max(y):
     return ranks
 
 
-def _nn_radius_based(X_sub, random_state):
-    """Radius-based NN selection with random tie breaking."""
+def _nn_radius_based(X_sub, aggregator):
+    """Radius-based NN tie set aggregation.
+
+    For each sample i, computes the indices of all samples at the minimal
+    distance from i (within a tiny epsilon), excluding i itself, and stores the
+    value returned by ``aggregator``.
+
+    Parameters
+    ----------
+    X_sub : array-like of shape (n_samples, n_selected_features)
+    aggregator : callable
+        Called as ``aggregator(nn_ties)`` for each sample, where ``nn_ties`` is
+        a 1d ndarray[int] containing all indices tied at the minimal
+        nearest-neighbor distance from the current sample.
+
+    Returns
+    -------
+    aggregated : ndarray of shape (n_samples,), dtype=float
+        Aggregated nearest-neighbor values returned by ``aggregator``.
+    """
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
+    aggregated = np.empty(n, dtype=float)
 
     # Fit NN on X_sub
     nbrs = NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
@@ -65,33 +84,22 @@ def _nn_radius_based(X_sub, random_state):
     min_distance = distances[:, 0]
 
     eps = 1e-13  # to get all neighbors of min distance
-    # For each i, collect all min-dist neighbors, remove self, pick one at random
-    nbr_i = np.empty(n, dtype=int)
+
+    # For each i, collect all min-dist neighbors, remove self, and aggregate.
     for i in range(n):
         # Query neighbors in the tight radius around the nearest neighbor distance
-        neighbors = nbrs.radius_neighbors(
+        nn_ties = nbrs.radius_neighbors(
             X_sub[i, :].reshape(1, -1), min_distance[i] + eps, return_distance=False
         )[0]
         # Remove self index if present
-        neighbors = neighbors[neighbors != i]
-        nbr_i[i] = random_state.choice(neighbors)
+        nn_ties = nn_ties[nn_ties != i]
+        aggregated[i] = aggregator(nn_ties)
 
-    return nbr_i
-
-
-def _pick_other_in_same_group(group, sample_idx, random_state):
-    """Pick a random index from `group` that is not `sample_idx`.
-
-    Returns None if the group has no alternative member.
-    """
-    if group.size < 2:
-        return None
-    choices = group[group != sample_idx]
-    return int(random_state.choice(choices))
+    return aggregated
 
 
-def _tied_min_distance_candidates(group_idx, Xu, groups):
-    """Return candidate sample indices from all unique rows tied at minimal distance.
+def _tied_min_distance_neighbors(group_idx, Xu, groups):
+    """Return sample indices from all unique rows tied at minimal distance.
 
     Excludes the self unique row at `group_idx`.
     """
@@ -104,13 +112,36 @@ def _tied_min_distance_candidates(group_idx, Xu, groups):
     return np.concatenate([groups[u] for u in tied_group_idx])
 
 
-def _nn_grouping_based(X_sub, random_state):
-    """Grouping-based NN selection with random tie-breaking.
+def _nn_grouping_based(X_sub, aggregator):
+    """Grouping-based NN tie set aggregation.
+
+    For each sample i:
+      - If there are other samples with identical X_sub rows (distance 0), the
+        tie set is the other members of that identical-row group.
+      - Otherwise, the tie set consists of all samples whose unique-row
+        representation is tied at the minimal distance.
+
+    The computed tie set is passed to ``aggregator``, and the
+    returned value is stored in the result array.
 
     Precondition: n_samples >= 2.
+
+    Parameters
+    ----------
+    X_sub : array-like of shape (n_samples, n_selected_features)
+    aggregator : callable
+        Called as ``aggregator(nn_ties)`` for each sample, where ``nn_ties`` is
+        a 1d ndarray[int] containing all indices tied at the minimal
+        nearest-neighbor distance from the current sample.
+
+    Returns
+    -------
+    aggregated : ndarray of shape (n_samples,), dtype=float
+        Aggregated nearest-neighbor values returned by ``aggregator``.
     """
     X_sub = np.asarray(X_sub)
     n = X_sub.shape[0]
+    aggregated = np.empty(n, dtype=float)
 
     # 1) Group exactly identical rows
     Xu, inv = np.unique(X_sub, axis=0, return_inverse=True)  # Xu: (m, p)
@@ -122,16 +153,15 @@ def _nn_grouping_based(X_sub, random_state):
         groups[group_idx].append(sample_idx)
     groups = [np.asarray(g, dtype=int) for g in groups]
 
-    nbr_i = np.empty(n, dtype=int)
-
     # ---- Case A: only one unique row (all rows identical) ----
+    #
+    # In this case, all distances are 0 and every "nearest neighbor" tie is global.
+    # Tie set for each i is all indices except i itself.
     if m == 1:
         group = groups[0]  # all indices, size n>=2
         for sample_idx in range(n):
-            nbr_i[sample_idx] = _pick_other_in_same_group(
-                group, sample_idx, random_state
-            )
-        return nbr_i
+            aggregated[sample_idx] = aggregator(group[group != sample_idx])
+        return aggregated
 
     # NN structure on unique rows
     nn = NearestNeighbors(algorithm="auto")
@@ -147,26 +177,32 @@ def _nn_grouping_based(X_sub, random_state):
         group_idx = inv[sample_idx]
         group = groups[group_idx]
 
-        same_group_pick = _pick_other_in_same_group(group, sample_idx, random_state)
-        if same_group_pick is not None:
-            nbr_i[sample_idx] = same_group_pick
+        if group.size > 1:
+            aggregated[sample_idx] = aggregator(group[group != sample_idx])
             continue
 
         unique_nn = (m == 2) or (nn_dist[group_idx, 1] > nn_dist[group_idx, 0])
 
         if unique_nn:
             nn_group_idx = int(nn_idx[group_idx, 0])
-            candidates = groups[nn_group_idx]
+            nn_ties = groups[nn_group_idx]
         else:
             # tie at the minimum distance -> brute-force only for this group_idx
-            candidates = _tied_min_distance_candidates(group_idx, Xu, groups)
+            nn_ties = _tied_min_distance_neighbors(group_idx, Xu, groups)
 
-        nbr_i[sample_idx] = int(random_state.choice(candidates))
+        aggregated[sample_idx] = aggregator(nn_ties)
 
-    return nbr_i
+    return aggregated
 
 
-def _Tn(X_sub, y_rank, random_state, *, nn_strategy="grouping"):
+def _Tn(
+    X_sub,
+    y_rank,
+    random_state,
+    *,
+    nn_strategy="grouping",
+    nn_tie_breaking="random",
+):
     """Compute :math:`T_n` following Fuchs (2024).
 
     The implementation uses the expression for :math:`T_n` given in
@@ -186,7 +222,11 @@ def _Tn(X_sub, y_rank, random_state, *, nn_strategy="grouping"):
     random_state : numpy.random.RandomState
         Random number generator used to break nearest-neighbor ties.
     nn_strategy : {"grouping", "radius"}, default="grouping"
-        Strategy used to select the nearest neighbor indices.
+        Strategy used to compute NN tie sets.
+    nn_tie_breaking : {"random", "mean"}, default="random"
+        How to resolve ties among equally-distanced nearest neighbors.
+        If "random", one tied neighbor is selected at random.
+        If "mean", the mean ``y_rank`` across all tied neighbors is used.
 
     Returns
     -------
@@ -194,17 +234,36 @@ def _Tn(X_sub, y_rank, random_state, *, nn_strategy="grouping"):
         Value of the :math:`T_n` statistic for ``X_sub`` and ``y_rank``.
     """
     X_sub = np.asarray(X_sub)
+    y_rank = np.asarray(y_rank)
     n = X_sub.shape[0]
 
+    if nn_tie_breaking not in ("random", "mean"):
+        raise ValueError(
+            "nn_tie_breaking must be one of {'random', 'mean'}, "
+            f"got {nn_tie_breaking!r}."
+        )
+
+    if nn_tie_breaking == "random":
+
+        def aggregate_nn_ties(nn_ties):
+            return float(y_rank[int(random_state.choice(nn_ties))])
+
+    else:
+        # nn_tie_breaking == "mean"
+        def aggregate_nn_ties(nn_ties):
+            return float(np.mean(y_rank[nn_ties], dtype=float))
+
+    # Neighbor target ranks used in the T_n formula. Kept as float to support
+    # mean tie-breaking.
     if nn_strategy == "grouping":
-        nbr_i = _nn_grouping_based(X_sub, random_state)
+        y_rank_nbr = _nn_grouping_based(X_sub, aggregate_nn_ties)
     else:
         assert nn_strategy == "radius"
-        nbr_i = _nn_radius_based(X_sub, random_state)
+        y_rank_nbr = _nn_radius_based(X_sub, aggregate_nn_ties)
 
     # Apply the formula (indices are 0-based; y_rank is 1-based)
-    term1 = np.sum(np.abs(y_rank - y_rank[nbr_i]))
-    term2 = np.sum(y_rank[nbr_i]) + np.sum(y_rank) - n * (n + 1)
+    term1 = np.sum(np.abs(y_rank - y_rank_nbr))
+    term2 = np.sum(y_rank_nbr) + np.sum(y_rank) - n * (n + 1)
     result = 1 - 3 / (n**2 - 1) * term1 + 3 / (n**2 - 1) * term2
     return float(result)
 
@@ -251,7 +310,12 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         Columns with zero variance are left unchanged.
 
     nn_strategy : {"grouping", "radius"}, default="grouping"
-        Strategy used to select nearest neighbors for computing :math:`T_n`.
+        Strategy used to compute NN tie sets for :math:`T_n`.
+
+    nn_tie_breaking : {"random", "mean"}, default="random"
+        How to resolve ties among equally-distanced nearest neighbors.
+        If "random", one tied neighbor is selected at random.
+        If "mean", the mean target rank across all tied neighbors is used.
 
     random_state : int, RandomState instance or None, default=None
         Controls the random tie-breaking among nearest neighbors. Pass an int
@@ -288,6 +352,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         "min_delta": [None, Interval(Real, None, None, closed="neither")],
         "standardize": [None, StrOptions({"normalize"})],
         "nn_strategy": [StrOptions({"grouping", "radius"})],
+        "nn_tie_breaking": [StrOptions({"random", "mean"})],
         "random_state": ["random_state"],
     }
 
@@ -297,12 +362,14 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         min_delta=0,
         standardize="normalize",
         nn_strategy="grouping",
+        nn_tie_breaking="random",
         random_state=None,
     ):
         self.max_features = max_features
         self.min_delta = min_delta
         self.standardize = standardize
         self.nn_strategy = nn_strategy
+        self.nn_tie_breaking = nn_tie_breaking
         self.random_state = random_state
 
     @_fit_context(prefer_skip_nested_validation=True)
@@ -363,7 +430,13 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             for j in remaining:
                 sel_candidate = selected + [j]
                 X_sub = X[:, sel_candidate]
-                Tn_val = _Tn(X_sub, y_rank, random_state, nn_strategy=self.nn_strategy)
+                Tn_val = _Tn(
+                    X_sub,
+                    y_rank,
+                    random_state,
+                    nn_strategy=self.nn_strategy,
+                    nn_tie_breaking=self.nn_tie_breaking,
+                )
                 if Tn_val > best_Tn:
                     best_Tn = Tn_val
                     best_j = j
