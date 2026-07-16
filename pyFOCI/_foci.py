@@ -360,6 +360,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         self,
         max_features=None,
         min_delta=0,
+        *,
         standardize="normalize",
         nn_strategy="grouping",
         nn_tie_breaking="random",

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with default value `"random"` for the usual behavior, and value `"mean"` for the
   new deterministic tie breaking.
 
+### Changed
+- The `FOCISelector` parameters `standardize`, `nn_strategy`, `nn_tie_breaking`, and `random_state`
+  are now keyword-only.
+
 ## [0.3.2]
 
 ### Added
@@ -38,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Introduced an alternative nearest neighbors selection algorithm, similar to the R reference implementation.
-  It is exposed with the new keyword-only `FOCISelector` parameter `nn_strategy="grouping"`.
+  It is exposed with the new `FOCISelector` parameter `nn_strategy="grouping"`.
   The original algorithm remains available with `nn_strategy="radius"`.
 
 ## Changed
