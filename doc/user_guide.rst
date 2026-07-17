@@ -44,11 +44,27 @@ and via **Fuchs, S. (2024)** , works as follows:
    
    This results in the same selection as in original FOCI, because the numerator of the conditional :math:`T_n` is the difference
    of the numerators of two such unconditional :math:`T_n` values.
+
 3. **Stopping Criteria**: The process continues until one of the following conditions is met:
 
    - The first :math:`T_n` coefficient or the **improvement** in the :math:`T_n` is less than the specified ``min_delta``.
    - All available features have been selected.
    - The number of selected features reaches ``max_features``.
+
+The Fuchs :math:`T_n` formula is derived for continuous :math:`y`, so using it on data with repeated :math:`y` values
+can lead to suboptimal feature selection. Note that the formula contains the term
+
+.. math::
+
+   \sum_{i=1}^n R_{\mathrm{N}(i)}
+   +
+   \sum_{i=1}^n R_i
+   -
+   n(n+1).
+
+This is related to the rank sum equation :math:`\sum_i R_i = n(n+1)/2`, which for non-continuous :math:`y` and maximum rank
+does not hold. To alleviate this, we offer a parameter ``rank_method`` to switch from maximum rank, as necessary for Azadkia's
+proof that :math:`T_n` is a consistent estimator, to average rank, where the rank sum equation always holds.
 
 Additionally, we offer a parameter ``nn_tie_breaking`` to switch from the original stochastic :math:`T_n` estimator
 to a deterministic version that uses the mean :math:`y` rank of all tied nearest neighbors.

@@ -22,32 +22,47 @@ from sklearn.utils.multiclass import type_of_target
 from sklearn.utils.validation import validate_data
 
 
-def _rank_max(y):
-    """Compute 1-based ranks with the ``max`` method for ties.
+def _rank(y, method="max"):
+    """Compute 1-based ranks with configurable tie handling.
 
     Parameters
     ----------
     y : array-like of shape (n_samples,)
         Values to rank.
+    method : {"max", "average"}, default="max"
+        Method used to assign ranks to tied values.
+        If "max", tied values receive the maximum rank in their tie group.
+        If "average", tied values receive the average rank in their tie group.
 
     Returns
     -------
     ranks : ndarray of shape (n_samples,), dtype=float
-        One-based ranks, assigning the maximum rank to tied values.
+        One-based ranks.
     """
+    if method not in ("max", "average"):
+        raise ValueError("method must be one of {'max', 'average'}, got {method!r}.")
+
     y = np.asarray(y)
     n = y.shape[0]
     idx = np.argsort(y, kind="mergesort")
     y_sorted = y[idx]
     ranks = np.empty(n, dtype=float)
     i = 0
-    # Assign the maximum rank to ties
+
     while i < n:
         j = i
         while j + 1 < n and y_sorted[j + 1] == y_sorted[i]:
             j += 1
-        ranks[idx[i : j + 1]] = j + 1
+
+        if method == "max":
+            rank = j + 1
+        else:
+            # method == "average"
+            rank = 0.5 * (i + j) + 1
+
+        ranks[idx[i : j + 1]] = rank
         i = j + 1
+
     return ranks
 
 
@@ -217,8 +232,7 @@ def _Tn(
         Candidate subset of the input features used to compute nearest
         neighbors.
     y_rank : ndarray of shape (n_samples,)
-        One-based ranks of the target values, typically computed with
-        :func:`_rank_max`.
+        One-based ranks of the target values.
     random_state : numpy.random.RandomState
         Random number generator used to break nearest-neighbor ties.
     nn_strategy : {"grouping", "radius"}, default="grouping"
@@ -254,7 +268,7 @@ def _Tn(
             return float(np.mean(y_rank[nn_ties], dtype=float))
 
     # Neighbor target ranks used in the T_n formula. Kept as float to support
-    # mean tie-breaking.
+    # mean tie-breaking and average target ranks.
     if nn_strategy == "grouping":
         y_rank_nbr = _nn_grouping_based(X_sub, aggregate_nn_ties)
     else:
@@ -309,6 +323,11 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         variance before computing nearest neighbors. If None, X is used as-is.
         Columns with zero variance are left unchanged.
 
+    rank_method : {"max", "average"}, default="max"
+        Method used to assign one-based ranks to the target values.
+        If "max", tied values receive the maximum rank in their tie group.
+        If "average", tied values receive the average rank in their tie group.
+
     nn_strategy : {"grouping", "radius"}, default="grouping"
         Strategy used to compute NN tie sets for :math:`T_n`.
 
@@ -351,6 +370,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         "max_features": [None, Interval(Integral, 1, None, closed="left")],
         "min_delta": [None, Interval(Real, None, None, closed="neither")],
         "standardize": [None, StrOptions({"normalize"})],
+        "rank_method": [StrOptions({"max", "average"})],
         "nn_strategy": [StrOptions({"grouping", "radius"})],
         "nn_tie_breaking": [StrOptions({"random", "mean"})],
         "random_state": ["random_state"],
@@ -362,6 +382,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         min_delta=0,
         *,
         standardize="normalize",
+        rank_method="max",
         nn_strategy="grouping",
         nn_tie_breaking="random",
         random_state=None,
@@ -369,6 +390,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         self.max_features = max_features
         self.min_delta = min_delta
         self.standardize = standardize
+        self.rank_method = rank_method
         self.nn_strategy = nn_strategy
         self.nn_tie_breaking = nn_tie_breaking
         self.random_state = random_state
@@ -413,7 +435,8 @@ class FOCISelector(SelectorMixin, BaseEstimator):
                 "Just one sample provided. Need at least two for nearest neighbors."
             )
 
-        y_rank = _rank_max(y)
+        y_rank = _rank(y, method=self.rank_method)
+
         random_state = check_random_state(self.random_state)
 
         max_features = n_features if self.max_features is None else self.max_features

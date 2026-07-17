@@ -12,7 +12,7 @@ from sklearn.utils._param_validation import InvalidParameterError
 from sklearn.utils._testing import assert_allclose
 
 from pyFOCI import FOCISelector
-from pyFOCI._foci import _nn_grouping_based, _nn_radius_based, _Tn
+from pyFOCI._foci import _nn_grouping_based, _nn_radius_based, _rank, _Tn
 
 
 def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
@@ -146,6 +146,68 @@ def test_standardize_none():
     FOCISelector(random_state=0, standardize=None).fit(X_df, y)
 
 
+def test_rank_method_max_is_default():
+    """
+    rank_method="max" is the default and should match an explicit max-rank fit.
+    """
+    X_df, y = make_demo_data(n=100, p=10, seed=0)
+
+    selector_default = FOCISelector(random_state=0, min_delta=None, max_features=3).fit(
+        X_df, y
+    )
+    selector_max = FOCISelector(
+        random_state=0, min_delta=None, max_features=3, rank_method="max"
+    ).fit(X_df, y)
+
+    np.testing.assert_array_equal(
+        selector_default.selected_indices_,
+        selector_max.selected_indices_,
+    )
+    assert_allclose(
+        selector_default.Tn_path_,
+        selector_max.Tn_path_,
+    )
+
+
+def test_rank_method_average_is_accepted():
+    """
+    rank_method="average" is accepted and produces a valid fitted selector.
+    """
+    X = np.array(
+        [
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [2.0, 1.0],
+            [3.0, 0.0],
+            [4.0, 1.0],
+        ]
+    )
+    y = np.array([1.0, 1.0, 2.0, 3.0, 3.0])
+
+    selector = FOCISelector(
+        random_state=0,
+        min_delta=None,
+        max_features=1,
+        rank_method="average",
+    ).fit(X, y)
+
+    assert selector.support_mask_.shape == (X.shape[1],)
+    assert selector.support_mask_.sum() == 1
+    assert selector.Tn_path_.shape == (1,)
+    assert np.isfinite(selector.Tn_path_[0])
+
+
+def test_rank_method_invalid_raises():
+    random_state = np.random.RandomState(0)
+    X = random_state.normal(size=(20, 3))
+    y = random_state.normal(size=20)
+
+    sel = FOCISelector(rank_method="invalid")
+    expected = "The 'rank_method' parameter of FOCISelector must be"
+    with pytest.raises(InvalidParameterError, match=re.escape(expected)):
+        sel.fit(X, y)
+
+
 def test_fit_raises_when_y_is_none():
     X = np.arange(10.0).reshape(-1, 1)
     sel = FOCISelector()
@@ -228,6 +290,36 @@ def test_nn_strategy_invalid_raises():
     expected = "The 'nn_strategy' parameter of FOCISelector must be"
     with pytest.raises(InvalidParameterError, match=re.escape(expected)):
         sel.fit(X, y)
+
+
+@pytest.mark.parametrize(
+    "method, expected",
+    [
+        ("max", np.array([2.0, 2.0, 3.0, 5.0, 5.0])),
+        ("average", np.array([1.5, 1.5, 3.0, 4.5, 4.5])),
+    ],
+)
+def test_rank_handles_ties(method, expected):
+    y = np.array([1.0, 1.0, 2.0, 3.0, 3.0])
+
+    ranks = _rank(y, method=method)
+
+    assert_allclose(ranks, expected)
+
+
+def test_rank_restores_original_order():
+    y = np.array([3.0, 1.0, 3.0, 2.0, 1.0])
+
+    ranks = _rank(y, method="average")
+
+    assert_allclose(ranks, np.array([4.5, 1.5, 4.5, 3.0, 1.5]))
+
+
+def test_rank_invalid_method_raises():
+    y = np.array([1.0, 2.0, 3.0])
+
+    with pytest.raises(ValueError, match=re.escape("method must be one of")):
+        _rank(y, method="invalid")
 
 
 def test_nn_grouping_based_no_ties():
