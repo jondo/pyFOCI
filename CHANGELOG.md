@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Introduced an alternative method to deal with nearest neighbor ties:
-  Instead of selecting one of the tied neighbors randomly, then using its `y_rank`,
-  one can now switch to deterministically using the mean `y_rank` of all tied neighbors instead.
+  Instead of selecting one of the tied neighbors randomly and then using its target rank,
+  one can now switch to deterministically using the mean target rank of all tied neighbors instead.
   For this, the new keyword-only `FOCISelector` parameter `nn_tie_breaking` is introduced,
   with default value `"random"` for the usual behavior, and value `"mean"` for the
   new deterministic tie breaking.
