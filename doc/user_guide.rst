@@ -67,6 +67,7 @@ can lead to suboptimal feature selection. Note that the formula contains the off
 rank sum equation :math:`\sum_i R_i = n(n+1)/2`, which for non-continuous :math:`y` and maximum rank
 does not hold. To alleviate this, we offer a parameter ``rank_method`` to switch from maximum-rank to average-rank:
 tied values receive the average rank in their tie group. With average-rank the sum equation always holds.
+See :doc:`the rank method comparison example </auto_examples/plot_FOCISelector_average_beats_max>`.
 
 The selection works as follows:
 
