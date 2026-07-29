@@ -36,12 +36,12 @@ How our Implementation Works
 We have added a ``max_features`` parameter, and a :math:`T_n` threshold ``min_delta`` to extend the stopping criteria.
 
 Also, the selection process, modified as in the `FOCI R reference implementation <https://cran.r-project.org/package=FOCI>`_
-and via **Fuchs, S. (2024)** , works as follows:
+and via **Fuchs, S. (2024)**, works as follows:
 
 2. **Iterative Step**: Once a set of features :math:`S_{k-1}` has been selected, FOCI searches for the next feature :math:`j` among the remaining candidates that maximizes the **unconditional** dependence:
-   
-   :math:`T_n(y, j ∪ S_{k-1})`
-   
+
+   :math:`T_n(y, \{j\} \cup S_{k-1})`
+
    This results in the same selection as in original FOCI, because the numerator of the conditional :math:`T_n` is the difference
    of the numerators of two such unconditional :math:`T_n` values.
 
