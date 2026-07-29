@@ -1,4 +1,4 @@
-.. title:: User Guide : contents
+.. title:: User Guide
 
 .. _user_guide:
 
