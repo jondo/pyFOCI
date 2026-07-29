@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+- Made the target rank tie handling configurable. For this, the new keyword-only `FOCISelector` parameter
+  `rank_method` is introduced, with default value `"max"` for using the maximum rank as before,
+  and value `"average"` for using the average rank instead. With the maximum rank, the
+  implemented conditional dependence coefficient estimator is proven to be consistent in the case of a
+  continuous target. The average rank however empirically makes the estimator work better in case of
+  tied target values, see the provided example.
+- Added the estimator formulas to the user guide.
+
 ## [0.4.0]
 
 ### Added
