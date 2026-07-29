@@ -6,6 +6,8 @@
 import os
 import sys
 
+from sphinx_gallery.sorting import ExplicitOrder
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 from importlib.metadata import version as get_version
@@ -108,7 +110,18 @@ plot_gallery = 'True'
 sphinx_gallery_conf = {
     "doc_module": "pyFOCI",
     "backreferences_dir": os.path.join("generated"),
-    "examples_dirs": "../examples",
-    "gallery_dirs": "auto_examples",
+    "examples_dirs": ["../examples"],
+    "gallery_dirs": ["auto_examples"],
     "reference_url": {"pyFOCI": None},
+    # Define the example order. Every example file must be listed here
+    # (or use "*" as a wildcard to collect the rest).
+    "within_subsection_order": ExplicitOrder(
+        [
+            "plot_FOCISelector_progression.py",
+            "plot_FOCISelector_comparison.py",
+            "plot_FOCISelector_bike_sharing.py",
+            "plot_FOCISelector_tie_breaking.py",
+            "plot_FOCISelector_average_beats_max.py",
+        ]
+    ),
 }
