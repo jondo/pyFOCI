@@ -659,22 +659,19 @@ def test_n_jobs_parallel_matches_sequential_for_mean_tie_breaking():
     assert_allclose(parallel.Tn_path_, sequential.Tn_path_)
 
 
-def test_n_jobs_parallel_random_ties_are_reproducible_across_worker_counts():
-    """Parallel random tie-breaking uses deterministic per-candidate streams."""
+def test_n_jobs_random_ties_match_across_worker_counts():
+    """A seeded random tie path is identical in sequential and parallel fits."""
     X = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])
     y = np.array([0.0, 1.0, 2.0, 3.0])
     params = dict(random_state=42, max_features=2, min_delta=None)
 
-    first = FOCISelector(**params, n_jobs=2).fit(X, y)
-    second = FOCISelector(**params, n_jobs=2).fit(X, y)
-    all_workers = FOCISelector(**params, n_jobs=-1).fit(X, y)
-
-    np.testing.assert_array_equal(first.selected_indices_, second.selected_indices_)
-    assert_allclose(first.Tn_path_, second.Tn_path_)
-    np.testing.assert_array_equal(
-        first.selected_indices_, all_workers.selected_indices_
-    )
-    assert_allclose(first.Tn_path_, all_workers.Tn_path_)
+    baseline = FOCISelector(**params).fit(X, y)
+    for n_jobs in (1, 2, -1):
+        selector = FOCISelector(**params, n_jobs=n_jobs).fit(X, y)
+        np.testing.assert_array_equal(
+            selector.selected_indices_, baseline.selected_indices_
+        )
+        assert_allclose(selector.Tn_path_, baseline.Tn_path_)
 
 
 def test_score_candidate_uses_its_assigned_random_seed():

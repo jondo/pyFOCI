@@ -369,12 +369,11 @@ class FOCISelector(SelectorMixin, BaseEstimator):
 
     n_jobs : int or None, default=None
         Number of parallel worker processes used to score candidate features in
-        each forward-selection round. ``None`` and ``1`` use the sequential
-        implementation. ``-1`` uses all available processors; values below
-        ``-1`` follow joblib's convention. Parallel runs use independent,
-        deterministic random streams per candidate when ``random_state`` is
-        set. Consequently, random tie-breaking results need not match a
-        sequential run, but are reproducible across parallel worker counts.
+        each forward-selection round. ``None`` and ``1`` score candidates
+        sequentially. ``-1`` uses all available processors; values below
+        ``-1`` follow joblib's convention. A fixed integer ``random_state``
+        assigns deterministic random streams per candidate, so results are
+        reproducible and identical across worker counts.
 
     Attributes
     ----------
@@ -493,44 +492,35 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             best_j = None
             best_Tn = -np.inf
 
+            # Generate seeds in feature order before scoring candidates. Each
+            # candidate therefore receives the same random stream whether it is
+            # evaluated sequentially or in a joblib worker process.
+            seeds = random_state.randint(
+                np.iinfo(np.uint32).max, size=len(remaining), dtype=np.uint32
+            )
+            score_args = (
+                (
+                    j,
+                    selected,
+                    X,
+                    y_rank,
+                    int(seed),
+                    self.nn_strategy,
+                    self.nn_tie_breaking,
+                )
+                for j, seed in zip(remaining, seeds)
+            )
             if self.n_jobs is None or self.n_jobs == 1:
-                # Preserve the established sequential random-state behavior.
-                for j in remaining:
-                    sel_candidate = selected + [j]
-                    X_sub = X[:, sel_candidate]
-                    Tn_val = _Tn(
-                        X_sub,
-                        y_rank,
-                        random_state,
-                        nn_strategy=self.nn_strategy,
-                        nn_tie_breaking=self.nn_tie_breaking,
-                    )
-                    if Tn_val > best_Tn:
-                        best_Tn = Tn_val
-                        best_j = j
+                scores = [_score_candidate(*args) for args in score_args]
             else:
-                # Generate seeds in feature order before dispatching work. This
-                # makes random tie-breaking reproducible regardless of worker
-                # scheduling and the chosen number of workers.
-                seeds = random_state.randint(
-                    np.iinfo(np.uint32).max, size=len(remaining), dtype=np.uint32
-                )
                 scores = Parallel(n_jobs=self.n_jobs)(
-                    delayed(_score_candidate)(
-                        j,
-                        selected,
-                        X,
-                        y_rank,
-                        int(seed),
-                        self.nn_strategy,
-                        self.nn_tie_breaking,
-                    )
-                    for j, seed in zip(remaining, seeds)
+                    delayed(_score_candidate)(*args) for args in score_args
                 )
-                # On equal scores retain the first feature in ``remaining``, as the
-                # sequential ``>`` comparison does. This is achieved with lexicographic
-                # sorting: first by T_n, then by smallest index.
-                best_j, best_Tn = max(scores, key=lambda score: (score[1], -score[0]))
+
+            # On equal scores retain the first feature in ``remaining``. This
+            # is achieved with lexicographic sorting: first by T_n, then by
+            # smallest index.
+            best_j, best_Tn = max(scores, key=lambda score: (score[1], -score[0]))
 
             # Early stopping behavior controlled by self.min_delta
             if self.min_delta is not None:

@@ -132,18 +132,16 @@ round in parallel using the scikit-learn convention ``n_jobs``:
     selector = FOCISelector(n_jobs=-1, random_state=0)
     selector.fit(X_train, y_train)
 
-``n_jobs=None`` (the default) and ``n_jobs=1`` retain the sequential implementation.
+``n_jobs=None`` (the default) and ``n_jobs=1`` score candidates sequentially.
 ``n_jobs=-1`` uses all processors made available to joblib; other non-zero integer
 values request that many worker processes. Parallelism is most useful when many
 features remain to be evaluated and computing :math:`T_n` is expensive. Small data
 sets may be slower because starting and communicating with worker processes has a
 cost.
 
-With ``nn_tie_breaking="mean"``, parallel and sequential runs give the same result.
-With the default random tie-breaking, a fixed integer ``random_state`` makes parallel
-runs reproducible across worker counts, but their random stream is intentionally
-different from the backwards-compatible sequential path. Therefore a parallel run
-need not have the same result as a sequential run when nearest-neighbor ties occur.
+A fixed integer ``random_state`` assigns deterministic random streams to candidate
+features. Consequently, sequential and parallel runs give the same result across
+worker counts, including with the default random tie-breaking.
 
 Benchmark locally rather than assuming that ``n_jobs=-1`` is fastest for a particular
 data set. The repository includes a non-CI benchmark task:
