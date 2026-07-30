@@ -144,11 +144,24 @@ features. Consequently, sequential and parallel runs give the same result across
 worker counts, including with the default random tie-breaking.
 
 Benchmark locally rather than assuming that ``n_jobs=-1`` is fastest for a particular
-data set. The repository includes a non-CI benchmark task:
+data set. From a source checkout, use the Pixi task:
 
 .. code-block:: bash
 
     OPENBLAS_NUM_THREADS=1 pixi run benchmark-n-jobs
+
+When pyFOCI is installed with pip, run the same benchmark as an installed Python
+module:
+
+.. code-block:: bash
+
+    OPENBLAS_NUM_THREADS=1 python -m pyFOCI.benchmark
+
+Or use uv to install pyFOCI into a temporary environment and run the module:
+
+.. code-block:: bash
+
+    OPENBLAS_NUM_THREADS=1 uv run --with pyFOCI python -m pyFOCI.benchmark
 
 The thread limit prevents each process from creating its own pool of BLAS threads.
 If benchmarking in an environment linked against MKL or another OpenMP-based numerical

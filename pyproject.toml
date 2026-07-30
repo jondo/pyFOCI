@@ -108,7 +108,7 @@ latest = ["latest", "test"]
 dev = ["doc", "lint", "test"]
 
 [tool.pixi.tasks]
-benchmark-n-jobs = "python benchmarks/benchmark_n_jobs.py"
+benchmark-n-jobs = "python -m pyFOCI.benchmark"
 # Build sdist and wheel into dist/
 build = "python -m build"
 # Validate long description and metadata

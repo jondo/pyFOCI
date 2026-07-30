@@ -13,7 +13,7 @@ import numpy as np
 from pyFOCI import FOCISelector
 
 
-def make_data(n_samples, n_features, seed):
+def _make_data(n_samples, n_features, seed):
     """Create a deterministic nonlinear regression data set."""
     rng = np.random.RandomState(seed)
     X = rng.normal(size=(n_samples, n_features))
@@ -26,7 +26,7 @@ def make_data(n_samples, n_features, seed):
     return X, y
 
 
-def time_fit(X, y, n_jobs, max_features, repeats):
+def _time_fit(X, y, n_jobs, max_features, repeats):
     """Return the fastest of repeated fits after one warm-up fit."""
     params = dict(
         max_features=max_features,
@@ -44,7 +44,7 @@ def time_fit(X, y, n_jobs, max_features, repeats):
     return min(elapsed)
 
 
-def main():
+def _main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=500)
     parser.add_argument("--features", type=int, default=120)
@@ -73,20 +73,21 @@ def main():
     else:
         n_jobs = args.n_jobs
 
-    X, y = make_data(args.samples, args.features, args.seed)
+    X, y = _make_data(args.samples, args.features, args.seed)
     print(f"os.cpu_count(): {cpu_count}")
     print(
         f"data: {args.samples} samples, {args.features} features; "
         f"max_features={args.max_features}; repeats={args.repeats}"
     )
     print(
-        "To avoid oversubscription, use OPENBLAS_NUM_THREADS=1 in the Pixi environment,\n"
-        "MKL_NUM_THREADS=1 and/or OMP_NUM_THREADS=1 for MKL/OpenMP-based environments."
+        "To avoid oversubscription, use OPENBLAS_NUM_THREADS=1 in the Pixi "
+        "environment, MKL_NUM_THREADS=1 and/or OMP_NUM_THREADS=1 for "
+        "MKL/OpenMP-based environments."
     )
 
     baseline_elapsed = None
     for worker_count in n_jobs:
-        elapsed = time_fit(X, y, worker_count, args.max_features, args.repeats)
+        elapsed = _time_fit(X, y, worker_count, args.max_features, args.repeats)
         if baseline_elapsed is None:
             baseline_elapsed = elapsed
         speedup = baseline_elapsed / elapsed
@@ -94,4 +95,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    _main()
