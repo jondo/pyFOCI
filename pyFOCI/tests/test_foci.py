@@ -12,7 +12,13 @@ from sklearn.utils._param_validation import InvalidParameterError
 from sklearn.utils._testing import assert_allclose
 
 from pyFOCI import FOCISelector
-from pyFOCI._foci import _nn_grouping_based, _nn_radius_based, _rank, _Tn
+from pyFOCI._foci import (
+    _nn_grouping_based,
+    _nn_radius_based,
+    _rank,
+    _score_candidate,
+    _Tn,
+)
 
 
 def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
@@ -624,3 +630,82 @@ def test_Tn_mean_tie_breaking_radius():
         nn_tie_breaking="mean",
     )
     assert np.isfinite(tn)
+
+
+def test_n_jobs_zero_raises():
+    X = np.arange(20.0).reshape(10, 2)
+    y = np.arange(10.0)
+
+    with pytest.raises(InvalidParameterError, match="'n_jobs'"):
+        FOCISelector(n_jobs=0).fit(X, y)
+
+
+def test_n_jobs_parallel_matches_sequential_for_mean_tie_breaking():
+    """Parallel candidate scoring preserves deterministic selection results."""
+    X, y = make_demo_data(n=80, p=8, seed=42)
+    params = dict(
+        random_state=0,
+        max_features=3,
+        min_delta=None,
+        nn_tie_breaking="mean",
+    )
+
+    sequential = FOCISelector(**params, n_jobs=1).fit(X, y)
+    parallel = FOCISelector(**params, n_jobs=2).fit(X, y)
+
+    np.testing.assert_array_equal(
+        parallel.selected_indices_, sequential.selected_indices_
+    )
+    assert_allclose(parallel.Tn_path_, sequential.Tn_path_)
+
+
+def test_n_jobs_parallel_random_ties_are_reproducible_across_worker_counts():
+    """Parallel random tie-breaking uses deterministic per-candidate streams."""
+    X = np.array([[0.0, 0.0], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]])
+    y = np.array([0.0, 1.0, 2.0, 3.0])
+    params = dict(random_state=42, max_features=2, min_delta=None)
+
+    first = FOCISelector(**params, n_jobs=2).fit(X, y)
+    second = FOCISelector(**params, n_jobs=2).fit(X, y)
+    all_workers = FOCISelector(**params, n_jobs=-1).fit(X, y)
+
+    np.testing.assert_array_equal(first.selected_indices_, second.selected_indices_)
+    assert_allclose(first.Tn_path_, second.Tn_path_)
+    np.testing.assert_array_equal(
+        first.selected_indices_, all_workers.selected_indices_
+    )
+    assert_allclose(first.Tn_path_, all_workers.Tn_path_)
+
+
+def test_score_candidate_uses_its_assigned_random_seed():
+    """A candidate worker has its own deterministic random stream."""
+    X = np.array(
+        [
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+        ]
+    )
+    y_rank = _rank(np.array([0.0, 1.0, 2.0, 3.0]))
+    seed = 42
+
+    j, score = _score_candidate(
+        1,
+        [0],
+        X,
+        y_rank,
+        seed,
+        nn_strategy="grouping",
+        nn_tie_breaking="random",
+    )
+
+    assert j == 1
+    expected = _Tn(
+        X[:, [0, 1]],
+        y_rank,
+        np.random.RandomState(seed),
+        nn_strategy="grouping",
+        nn_tie_breaking="random",
+    )
+    assert_allclose(score, expected)

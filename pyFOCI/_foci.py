@@ -8,6 +8,7 @@ Feature Ordering by Conditional Independence (FOCI)
 from numbers import Real
 
 import numpy as np
+from joblib import Parallel, delayed
 from sklearn.base import BaseEstimator, _fit_context
 from sklearn.feature_selection import SelectorMixin
 from sklearn.neighbors import NearestNeighbors
@@ -282,6 +283,31 @@ def _Tn(
     return float(result)
 
 
+def _score_candidate(
+    j,
+    selected,
+    X,
+    y_rank,
+    seed,
+    nn_strategy,
+    nn_tie_breaking,
+):
+    """Return the T_n score for adding feature ``j`` to ``selected``.
+
+    ``seed`` gives each parallel candidate evaluation an independent random
+    stream, avoiding shared mutable random state between worker processes.
+    """
+    X_sub = X[:, selected + [j]]
+    Tn_val = _Tn(
+        X_sub,
+        y_rank,
+        np.random.RandomState(seed),
+        nn_strategy=nn_strategy,
+        nn_tie_breaking=nn_tie_breaking,
+    )
+    return j, Tn_val
+
+
 class FOCISelector(SelectorMixin, BaseEstimator):
     """
     Feature selector using hierarchical forward selection based on the
@@ -341,6 +367,15 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         for reproducible results across multiple calls. If None, the global
         NumPy random state is used.
 
+    n_jobs : int or None, default=None
+        Number of parallel worker processes used to score candidate features in
+        each forward-selection round. ``None`` and ``1`` use the sequential
+        implementation. ``-1`` uses all available processors; values below
+        ``-1`` follow joblib's convention. Parallel runs use independent,
+        deterministic random streams per candidate when ``random_state`` is
+        set. Consequently, random tie-breaking results need not match a
+        sequential run, but are reproducible across parallel worker counts.
+
     Attributes
     ----------
     n_features_in_ : int
@@ -374,6 +409,11 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         "nn_strategy": [StrOptions({"grouping", "radius"})],
         "nn_tie_breaking": [StrOptions({"random", "mean"})],
         "random_state": ["random_state"],
+        "n_jobs": [
+            None,
+            Interval(Integral, None, -1, closed="right"),
+            Interval(Integral, 1, None, closed="left"),
+        ],
     }
 
     def __init__(
@@ -386,6 +426,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         nn_strategy="grouping",
         nn_tie_breaking="random",
         random_state=None,
+        n_jobs=None,
     ):
         self.max_features = max_features
         self.min_delta = min_delta
@@ -394,6 +435,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         self.nn_strategy = nn_strategy
         self.nn_tie_breaking = nn_tie_breaking
         self.random_state = random_state
+        self.n_jobs = n_jobs
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y):
@@ -451,19 +493,44 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             best_j = None
             best_Tn = -np.inf
 
-            for j in remaining:
-                sel_candidate = selected + [j]
-                X_sub = X[:, sel_candidate]
-                Tn_val = _Tn(
-                    X_sub,
-                    y_rank,
-                    random_state,
-                    nn_strategy=self.nn_strategy,
-                    nn_tie_breaking=self.nn_tie_breaking,
+            if self.n_jobs is None or self.n_jobs == 1:
+                # Preserve the established sequential random-state behavior.
+                for j in remaining:
+                    sel_candidate = selected + [j]
+                    X_sub = X[:, sel_candidate]
+                    Tn_val = _Tn(
+                        X_sub,
+                        y_rank,
+                        random_state,
+                        nn_strategy=self.nn_strategy,
+                        nn_tie_breaking=self.nn_tie_breaking,
+                    )
+                    if Tn_val > best_Tn:
+                        best_Tn = Tn_val
+                        best_j = j
+            else:
+                # Generate seeds in feature order before dispatching work. This
+                # makes random tie-breaking reproducible regardless of worker
+                # scheduling and the chosen number of workers.
+                seeds = random_state.randint(
+                    np.iinfo(np.uint32).max, size=len(remaining), dtype=np.uint32
                 )
-                if Tn_val > best_Tn:
-                    best_Tn = Tn_val
-                    best_j = j
+                scores = Parallel(n_jobs=self.n_jobs)(
+                    delayed(_score_candidate)(
+                        j,
+                        selected,
+                        X,
+                        y_rank,
+                        int(seed),
+                        self.nn_strategy,
+                        self.nn_tie_breaking,
+                    )
+                    for j, seed in zip(remaining, seeds)
+                )
+                # On equal scores retain the first feature in ``remaining``, as the
+                # sequential ``>`` comparison does. This is achieved with lexicographic
+                # sorting: first by T_n, then by smallest index.
+                best_j, best_Tn = max(scores, key=lambda score: (score[1], -score[0]))
 
             # Early stopping behavior controlled by self.min_delta
             if self.min_delta is not None:

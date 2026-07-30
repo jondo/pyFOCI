@@ -13048,4 +13048,5 @@ packages:
   requires_dist:
   - scikit-learn>=1.6
   - numpy
+  - joblib
   requires_python: '>=3.12'
