@@ -120,7 +120,7 @@ sphinx_gallery_conf = {
             "plot_FOCISelector_progression.py",
             "plot_FOCISelector_comparison.py",
             "plot_FOCISelector_bike_sharing.py",
-            "plot_FOCISelector_tie_breaking.py",
+            "plot_FOCISelector_NN_tie_breaking.py",
             "plot_FOCISelector_average_beats_max.py",
         ]
     ),
