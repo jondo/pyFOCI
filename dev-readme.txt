@@ -2,6 +2,7 @@ Testing and merging:
 ====================
 
 1. Locally:
+-----------
 
 # On new Python release:
 pixi update
@@ -17,9 +18,10 @@ pixi run -e doc build-doc
 Commit to a dev branch.
 
 pixi run build
-
+pixi run check-dist
 
 2. CI:
+------
 
 Push dev branch to GitHub.
 
