@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.0]
+## [0.6.0] - 2026-07-31
 
 ### Added
 - Added parallel candidate scoring through the new `FOCISelector` parameter `n_jobs`.
@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - With an integer `random_state`, FOCI now uses deterministic per-candidate random
   streams, yielding identical selections across sequential and parallel worker counts.
 
-## [0.5.0]
+## [0.5.0] - 2026-07-29
 
 ### Added
 - Made the target rank tie handling configurable. For this, the new keyword-only `FOCISelector` parameter
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tied target values, see the provided example.
 - Added the estimator formulas to the user guide.
 
-## [0.4.0]
+## [0.4.0] - 2026-07-16
 
 ### Added
 - Introduced an alternative method to deal with nearest neighbor ties:
@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `FOCISelector` parameters `standardize`, `nn_strategy`, `nn_tie_breaking`, and `random_state`
   are now keyword-only.
 
-## [0.3.2]
+## [0.3.2] - 2026-07-06
 
 ### Added
 - The documentation now contains an example comparing FOCI and Lasso on a small non-linear real-world dataset.
