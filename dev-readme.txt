@@ -52,3 +52,7 @@ git push origin main:main v0.1.2
 
 Check the GitHub and PyPI release pages.
 
+Save changed doc pages to archive.org,
+e.g. with https://addons.mozilla.org/en-US/firefox/addon/web-archive/
+or directly on https://web.archive.org/save .
+
