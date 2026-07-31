@@ -80,9 +80,9 @@ def _main():
         f"max_features={args.max_features}; repeats={args.repeats}"
     )
     print(
-        "To avoid oversubscription, use OPENBLAS_NUM_THREADS=1 in the Pixi "
-        "environment, MKL_NUM_THREADS=1 and/or OMP_NUM_THREADS=1 for "
-        "MKL/OpenMP-based environments."
+        "To avoid oversubscription, set OPENBLAS_NUM_THREADS=1 when using "
+        "OpenBLAS, or MKL_NUM_THREADS=1 and/or OMP_NUM_THREADS=1 when using "
+        "MKL/OpenMP."
     )
 
     baseline_elapsed = None
