@@ -94,5 +94,5 @@ def _main():
         print(f"n_jobs={worker_count:>3}: {elapsed:.3f}s ({speedup:.2f}x)")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     _main()
