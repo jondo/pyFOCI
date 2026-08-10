@@ -92,7 +92,7 @@ def _nn_radius_based(X_sub, aggregator):
     aggregated = np.empty(n, dtype=float)
 
     # Fit NN on X_sub
-    nbrs = NearestNeighbors(n_neighbors=2, algorithm="ball_tree")
+    nbrs = NearestNeighbors(n_neighbors=2)
     nbrs.fit(X_sub)
 
     # Get min distances
@@ -180,7 +180,7 @@ def _nn_grouping_based(X_sub, aggregator):
         return aggregated
 
     # NN structure on unique rows
-    nn = NearestNeighbors(algorithm="auto")
+    nn = NearestNeighbors()
     nn.fit(Xu)
 
     # For m==2: only one non-self neighbor exists for each unique row
