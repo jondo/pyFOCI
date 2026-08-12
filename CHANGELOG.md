@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `FOCISelector` now accepts `method="r_foci"`, implementing the Azadkia--Chatterjee
+  FOCI R reference implementation's selection. `method="fuchs"` remains the default.
+- Cross-check test against the CRAN `FOCI` R package, running in CI.
+- New example comparing both methods.
+
+### Changed
+- Switched the "average vs max rank" example to `r_foci` showing that the different selections
+  are not caused by the `fuchs` score inflation.
+- Renamed the fitted attribute `Tn_path_` to `score_path_`. Its values are the per-step
+  selection scores for both methods.
+
 ## [0.6.0] - 2026-07-31
 
 ### Added

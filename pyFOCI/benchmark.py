@@ -26,9 +26,10 @@ def _make_data(n_samples, n_features, seed):
     return X, y
 
 
-def _time_fit(X, y, n_jobs, max_features, repeats):
+def _time_fit(X, y, n_jobs, max_features, repeats, method="fuchs"):
     """Return the fastest of repeated fits after one warm-up fit."""
     params = dict(
+        method=method,
         max_features=max_features,
         min_delta=None,
         nn_tie_breaking="mean",
@@ -51,6 +52,13 @@ def _main():
     parser.add_argument("--max-features", type=int, default=8)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--method",
+        type=str,
+        choices=["fuchs", "r_foci"],
+        default="fuchs",
+        help="Selection scoring method: 'fuchs' (default) or 'r_foci'.",
+    )
     parser.add_argument(
         "--n-jobs",
         type=int,
@@ -77,6 +85,7 @@ def _main():
     print(f"os.cpu_count(): {cpu_count}")
     print(
         f"data: {args.samples} samples, {args.features} features; "
+        f"method={args.method!r}; "
         f"max_features={args.max_features}; repeats={args.repeats}"
     )
     print(
@@ -87,7 +96,9 @@ def _main():
 
     baseline_elapsed = None
     for worker_count in n_jobs:
-        elapsed = _time_fit(X, y, worker_count, args.max_features, args.repeats)
+        elapsed = _time_fit(
+            X, y, worker_count, args.max_features, args.repeats, method=args.method
+        )
         if baseline_elapsed is None:
             baseline_elapsed = elapsed
         speedup = baseline_elapsed / elapsed

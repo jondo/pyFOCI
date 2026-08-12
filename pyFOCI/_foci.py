@@ -283,29 +283,123 @@ def _Tn(
     return float(result)
 
 
+def _Qn(
+    X_sub,
+    y_rank,
+    y_rank_neg,
+    random_state,
+    *,
+    nn_strategy="grouping",
+    nn_tie_breaking="random",
+):
+    """Q_n(y, X_sub) = (1/n^2) sum_i [min(R_i, R_{N(i)}) - L_i^2 / n].
+
+    Numerator of the Azadkia--Chatterjee unconditional conditional-dependence
+    coefficient. ``y_rank`` are the 1-based ranks R_i of y and ``y_rank_neg`` are
+    the 1-based ranks L_i of -y, both computed with :func:`_rank`.
+
+    Parameters
+    ----------
+    X_sub : array-like of shape (n_samples, n_selected_features)
+        Candidate subset of the input features used to compute nearest
+        neighbors.
+    y_rank : ndarray of shape (n_samples,)
+        One-based ranks of the target values.
+    y_rank_neg : ndarray of shape (n_samples,)
+        One-based ranks of the negated target values.
+    random_state : numpy.random.RandomState
+        Random number generator used to break nearest-neighbor ties.
+    nn_strategy : {"grouping", "radius"}, default="grouping"
+        Strategy used to compute NN tie sets.
+    nn_tie_breaking : {"random", "mean"}, default="random"
+        How to resolve ties among equally-distanced nearest neighbors.
+        If "random", one tied neighbor is selected at random.
+        If "mean", the mean ``y_rank`` across all tied neighbors is used.
+
+    Returns
+    -------
+    Qn : float
+        Value of the Q_n statistic for ``X_sub``, ``y_rank``, and ``y_rank_neg``.
+    """
+    X_sub = np.asarray(X_sub)
+    y_rank = np.asarray(y_rank, dtype=float)
+    y_rank_neg = np.asarray(y_rank_neg, dtype=float)
+    n = X_sub.shape[0]
+
+    if nn_tie_breaking not in ("random", "mean"):
+        raise ValueError(
+            "nn_tie_breaking must be one of {'random', 'mean'}, "
+            f"got {nn_tie_breaking!r}."
+        )
+
+    if nn_tie_breaking == "random":
+
+        def aggregate_nn_ties(nn_ties):
+            return float(y_rank[int(random_state.choice(nn_ties))])
+
+    else:
+        # nn_tie_breaking == "mean"
+        def aggregate_nn_ties(nn_ties):
+            return float(np.mean(y_rank[nn_ties], dtype=float))
+
+    # Neighbor target ranks used in the Q_n formula. Kept as float to support
+    # mean tie-breaking and average target ranks.
+    if nn_strategy == "grouping":
+        y_rank_nbr = _nn_grouping_based(X_sub, aggregate_nn_ties)
+    else:
+        assert nn_strategy == "radius"
+        y_rank_nbr = _nn_radius_based(X_sub, aggregate_nn_ties)
+
+    Q = np.sum(np.minimum(y_rank, y_rank_nbr) - y_rank_neg**2 / n) / n**2
+    return float(Q)
+
+
+def _S_y(y_rank_neg):
+    """S(y) = (1/n^3) sum_i L_i (n - L_i), constant in the features."""
+    L = np.asarray(y_rank_neg, dtype=float)
+    n = L.shape[0]
+    return float(np.sum(L * (n - L)) / n**3)
+
+
 def _score_candidate(
     j,
     selected,
     X,
     y_rank,
+    y_rank_neg,
+    S_y,
     seed,
     nn_strategy,
     nn_tie_breaking,
+    method="fuchs",
 ):
-    """Return the T_n score for adding feature ``j`` to ``selected``.
+    """Return the selection score for adding feature ``j`` to ``selected``.
 
     ``seed`` gives each parallel candidate evaluation an independent random
     stream, avoiding shared mutable random state between worker processes.
     """
     X_sub = X[:, selected + [j]]
-    Tn_val = _Tn(
-        X_sub,
-        y_rank,
-        np.random.RandomState(seed),
-        nn_strategy=nn_strategy,
-        nn_tie_breaking=nn_tie_breaking,
-    )
-    return j, Tn_val
+    rng = np.random.RandomState(seed)
+    if method == "fuchs":
+        score = _Tn(
+            X_sub,
+            y_rank,
+            rng,
+            nn_strategy=nn_strategy,
+            nn_tie_breaking=nn_tie_breaking,
+        )
+    else:
+        assert method == "r_foci"
+        qn = _Qn(
+            X_sub,
+            y_rank,
+            y_rank_neg,
+            rng,
+            nn_strategy=nn_strategy,
+            nn_tie_breaking=nn_tie_breaking,
+        )
+        score = qn / S_y if S_y > 0 else 1.0
+    return j, score
 
 
 class FOCISelector(SelectorMixin, BaseEstimator):
@@ -314,7 +408,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     nonlinear Azadkia–Chatterjee T_n coefficient and its Fuchs form (see references).
 
     At each step, among remaining features, we choose the feature that maximizes
-    the cumulative T_n on the growing set S_k = S_{k-1} ∪ {j}.
+    the per-step score on the growing set S_k = S_{k-1} ∪ {j}.
 
     Parameters
     ----------
@@ -324,13 +418,13 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         or until all features are selected (if `min_delta` is None).
 
     min_delta : float or None, default=0
-        Minimum required improvement in the cumulative T_n to continue selecting.
+        Minimum required improvement in the selection score to continue selecting.
         Behavior:
 
           - First step:
-            select a feature only if best_Tn > min_delta; otherwise, select none.
+            select a feature only if best_score > min_delta; otherwise, select none.
           - Subsequent steps:
-            continue only if best_Tn > previous_best + min_delta; otherwise, stop.
+            continue only if best_score > previous_best + min_delta; otherwise, stop.
           - None disables early stopping (select up to `max_features`).
 
         Notes:
@@ -344,6 +438,13 @@ class FOCISelector(SelectorMixin, BaseEstimator):
           - min_delta == 0 corresponds to stop=TRUE
           - min_delta is None corresponds to stop=FALSE
 
+    method : {"fuchs", "r_foci"}, default="fuchs"
+        Selection scoring method:
+
+        - "fuchs" (default): Fuchs (2024) closed-form score.
+        - "r_foci": Azadkia–Chatterjee :math:`Q_n/S(y)` numerator/denominator form,
+          matching the FOCI R reference implementation's selection and stopping.
+
     standardize : {"normalize", None}, default="normalize"
         If "normalize", each column of X is standardized to zero mean and unit
         variance before computing nearest neighbors. If None, X is used as-is.
@@ -355,7 +456,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         If "average", tied values receive the average rank in their tie group.
 
     nn_strategy : {"grouping", "radius"}, default="grouping"
-        Strategy used to compute NN tie sets for :math:`T_n`.
+        Strategy used to compute NN tie sets.
 
     nn_tie_breaking : {"random", "mean"}, default="random"
         How to resolve ties among equally-distanced nearest neighbors.
@@ -386,8 +487,9 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     support_mask_ : ndarray of shape (``n_features_in_``,), dtype=bool
         Boolean mask of selected features determined during fit.
 
-    Tn_path_ : ndarray of shape (n_selected,)
-        Values of the cumulative T_n along the selection path.
+    score_path_ : ndarray of shape (n_selected,)
+        Values of the per-step selection scores; their interpretation
+        depends on ``method``.
 
     References
     ----------
@@ -403,6 +505,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     _parameter_constraints = {
         "max_features": [None, Interval(Integral, 1, None, closed="left")],
         "min_delta": [None, Interval(Real, None, None, closed="neither")],
+        "method": [StrOptions({"fuchs", "r_foci"})],
         "standardize": [None, StrOptions({"normalize"})],
         "rank_method": [StrOptions({"max", "average"})],
         "nn_strategy": [StrOptions({"grouping", "radius"})],
@@ -420,6 +523,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         max_features=None,
         min_delta=0,
         *,
+        method="fuchs",
         standardize="normalize",
         rank_method="max",
         nn_strategy="grouping",
@@ -429,6 +533,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     ):
         self.max_features = max_features
         self.min_delta = min_delta
+        self.method = method
         self.standardize = standardize
         self.rank_method = rank_method
         self.nn_strategy = nn_strategy
@@ -439,8 +544,8 @@ class FOCISelector(SelectorMixin, BaseEstimator):
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y):
         """
-        Fit the selector by hierarchical forward selection maximizing T_n
-        over the growing feature set.
+        Fit the selector by hierarchical forward selection maximizing the
+        per-step score (see ``method``) over the growing feature set.
 
         Parameters
         ----------
@@ -477,20 +582,29 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             )
 
         y_rank = _rank(y, method=self.rank_method)
+        y_rank_neg = _rank(-y, method=self.rank_method)
+        S_y = _S_y(y_rank_neg)
+
+        if S_y == 0.0:
+            self.selected_indices_ = np.asarray([], dtype=int)
+            self.score_path_ = np.asarray([], dtype=float)
+            mask = np.zeros(n_features, dtype=bool)
+            self.support_mask_ = mask
+            return self
 
         random_state = check_random_state(self.random_state)
 
         max_features = n_features if self.max_features is None else self.max_features
 
         selected = []  # S_k
-        Tn_path = []
+        score_path = []
         remaining = list(range(n_features))
-        Tn_prev = -np.inf
+        score_prev = -np.inf
 
         # Forward selection up to max_features
         while remaining and (len(selected) < max_features):
             best_j = None
-            best_Tn = -np.inf
+            best_score = -np.inf
 
             # Generate seeds in feature order before scoring candidates. Each
             # candidate therefore receives the same random stream whether it is
@@ -504,9 +618,12 @@ class FOCISelector(SelectorMixin, BaseEstimator):
                     selected,
                     X,
                     y_rank,
+                    y_rank_neg,
+                    S_y,
                     int(seed),
                     self.nn_strategy,
                     self.nn_tie_breaking,
+                    self.method,
                 )
                 for j, seed in zip(remaining, seeds)
             )
@@ -518,32 +635,32 @@ class FOCISelector(SelectorMixin, BaseEstimator):
                 )
 
             # On equal scores retain the first feature in ``remaining``. This
-            # is achieved with lexicographic sorting: first by T_n, then by
+            # is achieved with lexicographic sorting: first by score, then by
             # smallest index.
-            best_j, best_Tn = max(scores, key=lambda score: (score[1], -score[0]))
+            best_j, best_score = max(scores, key=lambda score: (score[1], -score[0]))
 
             # Early stopping behavior controlled by self.min_delta
             if self.min_delta is not None:
-                # First step: if best_Tn <= 0 + min_delta, select nothing and return
-                if len(selected) == 0 and best_Tn <= 0 + self.min_delta:
+                # First step: if best_score <= 0 + min_delta, select nothing and return
+                if len(selected) == 0 and best_score <= 0 + self.min_delta:
                     self.selected_indices_ = np.asarray([], dtype=int)
-                    self.Tn_path_ = np.asarray([], dtype=float)
+                    self.score_path_ = np.asarray([], dtype=float)
                     mask = np.zeros(n_features, dtype=bool)
                     self.support_mask_ = mask
                     return self
                 # Subsequent steps: stop if no sufficient improvement
-                if len(selected) > 0 and best_Tn <= Tn_prev + self.min_delta:
+                if len(selected) > 0 and best_score <= score_prev + self.min_delta:
                     break
 
             # Always add the best feature this round
             selected.append(best_j)
-            Tn_path.append(best_Tn)
+            score_path.append(best_score)
             remaining.remove(best_j)
-            Tn_prev = best_Tn
+            score_prev = best_score
 
         # Persist learned attributes
         self.selected_indices_ = np.asarray(selected, dtype=int)
-        self.Tn_path_ = np.asarray(Tn_path, dtype=float)
+        self.score_path_ = np.asarray(score_path, dtype=float)
 
         # Build mask
         mask = np.zeros(n_features, dtype=bool)

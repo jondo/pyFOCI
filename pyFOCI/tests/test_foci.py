@@ -4,6 +4,8 @@
 # License: BSD 3 clause
 
 import re
+import shutil
+import subprocess
 
 import numpy as np
 import pandas as pd
@@ -15,7 +17,9 @@ from pyFOCI import FOCISelector
 from pyFOCI._foci import (
     _nn_grouping_based,
     _nn_radius_based,
+    _Qn,
     _rank,
+    _S_y,
     _score_candidate,
     _Tn,
 )
@@ -107,7 +111,7 @@ def test_min_delta_zero_may_select_none_on_independent_data():
 
     # With early stopping enabled, zero features may be selected
     assert selector.support_mask_.sum() == 0
-    assert len(selector.Tn_path_) == 0
+    assert len(selector.score_path_) == 0
 
 
 def test_min_delta_none_ignores_early_stopping_and_selects_up_to_max():
@@ -122,7 +126,7 @@ def test_min_delta_none_ignores_early_stopping_and_selects_up_to_max():
     selector = FOCISelector(random_state=0, min_delta=None, max_features=3).fit(X, y)
 
     assert selector.support_mask_.sum() == 3
-    assert len(selector.Tn_path_) == 3
+    assert len(selector.score_path_) == 3
 
 
 def test_min_delta_enforces_gap():
@@ -134,7 +138,7 @@ def test_min_delta_enforces_gap():
     min_delta = 0.03
 
     selector = FOCISelector(random_state=0, min_delta=min_delta).fit(X_df, y)
-    tn = selector.Tn_path_
+    tn = selector.score_path_
     assert tn.size > 1  # precondition for testing a delta
 
     assert tn[0] > min_delta
@@ -170,8 +174,8 @@ def test_rank_method_max_is_default():
         selector_max.selected_indices_,
     )
     assert_allclose(
-        selector_default.Tn_path_,
-        selector_max.Tn_path_,
+        selector_default.score_path_,
+        selector_max.score_path_,
     )
 
 
@@ -199,8 +203,8 @@ def test_rank_method_average_is_accepted():
 
     assert selector.support_mask_.shape == (X.shape[1],)
     assert selector.support_mask_.sum() == 1
-    assert selector.Tn_path_.shape == (1,)
-    assert np.isfinite(selector.Tn_path_[0])
+    assert selector.score_path_.shape == (1,)
+    assert np.isfinite(selector.score_path_[0])
 
 
 def test_rank_method_invalid_raises():
@@ -258,8 +262,8 @@ def test_random_state_int_reproducible():
         selector_2.selected_indices_,
     )
     assert_allclose(
-        selector_1.Tn_path_,
-        selector_2.Tn_path_,
+        selector_1.score_path_,
+        selector_2.score_path_,
     )
 
 
@@ -282,8 +286,8 @@ def test_nn_strategy_grouping_and_radius_are_accepted_and_reproducible():
             selector_2.selected_indices_,
         )
         assert_allclose(
-            selector_1.Tn_path_,
-            selector_2.Tn_path_,
+            selector_1.score_path_,
+            selector_2.score_path_,
         )
 
 
@@ -632,6 +636,100 @@ def test_Tn_mean_tie_breaking_radius():
     assert np.isfinite(tn)
 
 
+def test_Qn_hand_computed_mean_ties():
+    """
+    Hand-computed test for _Qn with mean tie-breaking.
+
+    For X = [[0], [-1], [1]], y = [1, 2, 3], rank_method="max":
+      R = [1, 2, 3], L = [3, 2, 1].
+      Sample 0 has equidistant NN {1, 2} with mean rank (2 + 3) / 2 = 2.5.
+      Sample 1 has NN {0} with rank 1.
+      Sample 2 has NN {0} with rank 1.
+    """
+    X = np.array([[0.0], [-1.0], [1.0]])
+    y = np.array([1.0, 2.0, 3.0])
+    R = _rank(y, method="max")
+    L = _rank(-y, method="max")
+    n = X.shape[0]
+
+    # Target ranks of nearest neighbors
+    R_nbr = np.array([2.5, 1.0, 1.0])
+    expected_Q = float(np.sum(np.minimum(R, R_nbr) - L**2 / n) / n**2)
+
+    actual_Q = _Qn(
+        X,
+        R,
+        L,
+        np.random.RandomState(0),
+        nn_strategy="grouping",
+        nn_tie_breaking="mean",
+    )
+    assert actual_Q == pytest.approx(expected_Q, abs=1e-15)
+
+
+def test_S_y_constant_target_is_zero():
+    """Constant target yields L_i = n (for max rank) so S(y) == 0.0."""
+    y = np.array([42.0, 42.0, 42.0, 42.0])
+    L = _rank(-y, method="max")
+    assert _S_y(L) == 0.0
+
+
+@pytest.mark.parametrize("n", [5, 10])
+def test_S_y_uniform_continuous(n):
+    """For strictly continuous uniform y, S(y) = (n^2 - 1) / (6 * n^2)."""
+    y = np.arange(1, n + 1, dtype=float)
+    expected = (n**2 - 1) / (6 * n**2)
+    for rank_method in ("max", "average"):
+        L = _rank(-y, method=rank_method)
+        assert_allclose(_S_y(L), expected)
+
+
+def test_Qn_invalid_tie_breaking_raises():
+    X = np.array([[0.0], [1.0], [2.0]])
+    y_rank = np.array([1.0, 2.0, 3.0])
+    y_rank_neg = np.array([3.0, 2.0, 1.0])
+    random_state = np.random.RandomState(0)
+
+    with pytest.raises(ValueError, match=re.escape("nn_tie_breaking must be one of")):
+        _Qn(
+            X,
+            y_rank,
+            y_rank_neg,
+            random_state,
+            nn_strategy="grouping",
+            nn_tie_breaking="invalid",
+        )
+
+
+@pytest.mark.parametrize("strategy", ["grouping", "radius"])
+def test_Qn_divided_by_Sy_equals_Tn_on_continuous_data(strategy):
+    """On continuous data, Q_n(y, X) / S(y) == T_n(y, X) to machine precision."""
+    X_df, y = make_demo_data(n=300, p=10, seed=0)
+    X_sub = X_df.iloc[:, :3].to_numpy()
+    R = _rank(y, method="max")
+    L = _rank(-y, method="max")
+    rng = np.random.RandomState(0)
+
+    tn = _Tn(
+        X_sub,
+        R,
+        rng,
+        nn_strategy=strategy,
+        nn_tie_breaking="mean",
+    )
+    qn = _Qn(
+        X_sub,
+        R,
+        L,
+        rng,
+        nn_strategy=strategy,
+        nn_tie_breaking="mean",
+    )
+    sy = _S_y(L)
+
+    assert_allclose(qn / sy, tn, atol=1e-12)
+
+
 def test_n_jobs_zero_raises():
     X = np.arange(20.0).reshape(10, 2)
     y = np.arange(10.0)
@@ -656,7 +754,7 @@ def test_n_jobs_parallel_matches_sequential_for_mean_tie_breaking():
     np.testing.assert_array_equal(
         parallel.selected_indices_, sequential.selected_indices_
     )
-    assert_allclose(parallel.Tn_path_, sequential.Tn_path_)
+    assert_allclose(parallel.score_path_, sequential.score_path_)
 
 
 def test_n_jobs_random_ties_match_across_worker_counts():
@@ -671,7 +769,7 @@ def test_n_jobs_random_ties_match_across_worker_counts():
         np.testing.assert_array_equal(
             selector.selected_indices_, baseline.selected_indices_
         )
-        assert_allclose(selector.Tn_path_, baseline.Tn_path_)
+        assert_allclose(selector.score_path_, baseline.score_path_)
 
 
 def test_score_candidate_uses_its_assigned_random_seed():
@@ -684,7 +782,10 @@ def test_score_candidate_uses_its_assigned_random_seed():
             [1.0, 1.0],
         ]
     )
-    y_rank = _rank(np.array([0.0, 1.0, 2.0, 3.0]))
+    y = np.array([0.0, 1.0, 2.0, 3.0])
+    y_rank = _rank(y)
+    y_rank_neg = _rank(-y)
+    S_y = _S_y(y_rank_neg)
     seed = 42
 
     j, score = _score_candidate(
@@ -692,9 +793,12 @@ def test_score_candidate_uses_its_assigned_random_seed():
         [0],
         X,
         y_rank,
+        y_rank_neg,
+        S_y,
         seed,
         nn_strategy="grouping",
         nn_tie_breaking="random",
+        method="fuchs",
     )
 
     assert j == 1
@@ -706,3 +810,342 @@ def test_score_candidate_uses_its_assigned_random_seed():
         nn_tie_breaking="random",
     )
     assert_allclose(score, expected)
+
+
+def test_score_candidate_r_foci_uses_its_seed():
+    """A candidate worker for r_foci has its own deterministic random stream."""
+    X = np.array(
+        [
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [1.0, 1.0],
+        ]
+    )
+    y = np.array([0.0, 1.0, 2.0, 3.0])
+    y_rank = _rank(y)
+    y_rank_neg = _rank(-y)
+    S_y = _S_y(y_rank_neg)
+    seed = 42
+
+    j, score = _score_candidate(
+        1,
+        [0],
+        X,
+        y_rank,
+        y_rank_neg,
+        S_y,
+        seed,
+        nn_strategy="grouping",
+        nn_tie_breaking="random",
+        method="r_foci",
+    )
+
+    assert j == 1
+    expected_qn = _Qn(
+        X[:, [0, 1]],
+        y_rank,
+        y_rank_neg,
+        np.random.RandomState(seed),
+        nn_strategy="grouping",
+        nn_tie_breaking="random",
+    )
+    assert_allclose(score, expected_qn / S_y)
+
+
+def test_method_invalid_raises():
+    random_state = np.random.RandomState(0)
+    X = random_state.normal(size=(20, 3))
+    y = random_state.normal(size=20)
+
+    sel = FOCISelector(method="nonsense")
+    expected = "The 'method' parameter of FOCISelector must be"
+    with pytest.raises(InvalidParameterError, match=re.escape(expected)):
+        sel.fit(X, y)
+
+
+def test_fuchs_is_default():
+    X_df, y = make_demo_data(n=100, p=10, seed=0)
+    sel_default = FOCISelector(random_state=0).fit(X_df, y)
+    sel_fuchs = FOCISelector(method="fuchs", random_state=0).fit(X_df, y)
+
+    np.testing.assert_array_equal(
+        sel_default.selected_indices_, sel_fuchs.selected_indices_
+    )
+    assert_allclose(sel_default.score_path_, sel_fuchs.score_path_)
+
+
+@pytest.mark.parametrize("rank_method", ["max", "average"])
+def test_r_foci_accepts_both_rank_methods(rank_method):
+    X_df, y = make_demo_data(n=100, p=10, seed=0)
+    selector = FOCISelector(
+        method="r_foci",
+        rank_method=rank_method,
+        min_delta=None,
+        max_features=4,
+        random_state=0,
+    ).fit(X_df, y)
+    assert len(selector.selected_indices_) == 4
+    assert selector.score_path_.shape == (4,)
+    assert np.all(np.isfinite(selector.score_path_))
+
+
+@pytest.mark.parametrize("strategy", ["grouping", "radius"])
+@pytest.mark.parametrize("tie_breaking", ["random", "mean"])
+def test_r_foci_accepts_both_nn_strategies_and_tie_breaking(strategy, tie_breaking):
+    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    sel1 = FOCISelector(
+        method="r_foci",
+        nn_strategy=strategy,
+        nn_tie_breaking=tie_breaking,
+        random_state=0,
+        min_delta=None,
+        max_features=3,
+    ).fit(X_df, y)
+    sel2 = FOCISelector(
+        method="r_foci",
+        nn_strategy=strategy,
+        nn_tie_breaking=tie_breaking,
+        random_state=0,
+        min_delta=None,
+        max_features=3,
+    ).fit(X_df, y)
+    np.testing.assert_array_equal(sel1.selected_indices_, sel2.selected_indices_)
+    assert_allclose(sel1.score_path_, sel2.score_path_)
+
+
+def test_methods_agree_on_continuous_data():
+    X_df, y = make_demo_data(n=400, p=20, seed=0)
+
+    sel_fuchs = FOCISelector(
+        method="fuchs",
+        nn_tie_breaking="mean",
+        min_delta=None,
+        max_features=5,
+        random_state=0,
+    ).fit(X_df, y)
+    sel_rfoci = FOCISelector(
+        method="r_foci",
+        nn_tie_breaking="mean",
+        min_delta=None,
+        max_features=5,
+        random_state=0,
+    ).fit(X_df, y)
+    np.testing.assert_array_equal(
+        sel_fuchs.selected_indices_, sel_rfoci.selected_indices_
+    )
+    assert_allclose(sel_fuchs.score_path_, sel_rfoci.score_path_, atol=1e-10)
+
+    sel_fuchs_stop = FOCISelector(
+        method="fuchs",
+        nn_tie_breaking="mean",
+        min_delta=0,
+        random_state=0,
+    ).fit(X_df, y)
+    sel_rfoci_stop = FOCISelector(
+        method="r_foci",
+        nn_tie_breaking="mean",
+        min_delta=0,
+        random_state=0,
+    ).fit(X_df, y)
+    np.testing.assert_array_equal(
+        sel_fuchs_stop.selected_indices_, sel_rfoci_stop.selected_indices_
+    )
+    assert_allclose(sel_fuchs_stop.score_path_, sel_rfoci_stop.score_path_, atol=1e-10)
+
+
+def test_r_foci_min_delta_zero_may_select_none_on_independent_data():
+    random_state = np.random.RandomState(0)
+    X = random_state.normal(size=(10, 1))
+    y = random_state.normal(size=10)
+
+    selector = FOCISelector(method="r_foci", random_state=0, min_delta=0).fit(X, y)
+
+    assert selector.support_mask_.sum() == 0
+    assert len(selector.score_path_) == 0
+
+
+def test_r_foci_min_delta_none_selects_up_to_max():
+    random_state = np.random.RandomState(0)
+    X = random_state.normal(size=(20, 5))
+    y = random_state.normal(size=20)
+
+    selector = FOCISelector(
+        method="r_foci", random_state=0, min_delta=None, max_features=3
+    ).fit(X, y)
+
+    assert selector.support_mask_.sum() == 3
+    assert len(selector.score_path_) == 3
+
+
+def test_r_foci_min_delta_enforces_gap():
+    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    min_delta = 0.03
+
+    selector = FOCISelector(method="r_foci", random_state=0, min_delta=min_delta).fit(
+        X_df, y
+    )
+    scores = selector.score_path_
+    assert scores.size > 1
+
+    assert scores[0] > min_delta
+
+    diffs = np.diff(scores)
+    assert np.all(diffs > min_delta)
+
+
+@pytest.mark.parametrize("method", ["fuchs", "r_foci"])
+def test_r_foci_constant_y_selects_none(method):
+    X = np.random.RandomState(0).normal(size=(20, 3))
+    y = np.ones(20)
+
+    selector = FOCISelector(method=method, random_state=0).fit(X, y)
+    assert selector.selected_indices_.size == 0
+    assert selector.score_path_.size == 0
+    assert selector.support_mask_.sum() == 0
+
+
+@pytest.mark.parametrize("tie_breaking", ["random", "mean"])
+def test_r_foci_parallel_matches_sequential(tie_breaking):
+    X, y = make_demo_data(n=80, p=8, seed=42)
+    params = dict(
+        method="r_foci",
+        random_state=42,
+        max_features=3,
+        min_delta=None,
+        nn_tie_breaking=tie_breaking,
+    )
+
+    baseline = FOCISelector(**params, n_jobs=1).fit(X, y)
+    for n_jobs in (2, -1):
+        selector = FOCISelector(**params, n_jobs=n_jobs).fit(X, y)
+        np.testing.assert_array_equal(
+            selector.selected_indices_, baseline.selected_indices_
+        )
+        assert_allclose(selector.score_path_, baseline.score_path_)
+
+
+_RSCRIPT = shutil.which("Rscript")
+
+
+def test_r_foci_matches_R_reference_skips_when_no_rscript(monkeypatch, tmp_path):
+    monkeypatch.setattr("pyFOCI.tests.test_foci._RSCRIPT", None)
+    with pytest.raises(pytest.skip.Exception, match="Rscript not available"):
+        test_r_foci_matches_R_reference(tmp_path)
+
+
+def test_r_foci_matches_R_reference_skips_when_package_missing(monkeypatch, tmp_path):
+    monkeypatch.setattr("pyFOCI.tests.test_foci._RSCRIPT", "/fake/Rscript")
+
+    def fake_run(*args, **kwargs):
+        class FakeProbe:
+            stdout = "FALSE\n"
+
+        return FakeProbe()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(pytest.skip.Exception, match="R package 'FOCI' not installed"):
+        test_r_foci_matches_R_reference(tmp_path)
+
+
+def test_r_foci_matches_R_reference(tmp_path):
+    if _RSCRIPT is None:
+        pytest.skip("Rscript not available")
+
+    probe = subprocess.run(
+        [_RSCRIPT, "-e", 'cat(requireNamespace("FOCI", quietly=TRUE))'],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if probe.stdout.strip() != "TRUE":
+        pytest.skip("R package 'FOCI' not installed")
+
+    rng = np.random.RandomState(12345)
+    n, p = 300, 12
+    X = rng.normal(size=(n, p))
+    y = (
+        X[:, 0] * X[:, 1]
+        + np.sin(X[:, 0] * X[:, 2])
+        + X[:, 3] ** 2
+        + 0.3 * rng.normal(size=n)
+    )
+    X_scaled = (X - np.mean(X, axis=0)) / np.std(X, axis=0, ddof=1)
+
+    data = np.column_stack([y, X_scaled])
+    np.savetxt(tmp_path / "data.csv", data, delimiter=",")
+
+    oracle_r = tmp_path / "oracle.R"
+    oracle_r.write_text(
+        """data <- read.csv("data.csv", header=FALSE)
+Y <- data[, 1]
+X <- as.matrix(data[, -1])
+set.seed(2024)
+res <- FOCI::foci(
+  Y, as.matrix(X), stop=TRUE, numCores=1, standardize="none", na.rm=FALSE
+)
+cat("IDX", paste(res$selectedVar$index, collapse=","), "\n")
+cat("T", paste(format(res$stepT, digits=17), collapse=","), "\n")
+"""
+    )
+
+    out = subprocess.run(
+        [_RSCRIPT, str(oracle_r)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=True,
+    )
+
+    idx_line, t_line = "", ""
+    for line in out.stdout.splitlines():
+        if line.startswith("IDX"):
+            idx_line = line.split(maxsplit=1)[1].strip()
+        if line.startswith("T"):
+            t_line = line.split(maxsplit=1)[1].strip()
+
+    r_indices = [int(x) - 1 for x in idx_line.split(",") if x]
+    r_step_t = [float(x) for x in t_line.split(",") if x]
+
+    # Mean tie-breaking comparison (tight tolerance)
+    selector_mean = FOCISelector(
+        method="r_foci",
+        standardize=None,
+        min_delta=0,
+        nn_strategy="grouping",
+        nn_tie_breaking="mean",
+        rank_method="max",
+        random_state=2024,
+    ).fit(X_scaled, y)
+
+    np.testing.assert_array_equal(selector_mean.selected_indices_, r_indices)
+    assert_allclose(selector_mean.score_path_, r_step_t, atol=1e-10, rtol=1e-10)
+
+    # Random tie-breaking comparison
+    selector_rand = FOCISelector(
+        method="r_foci",
+        standardize=None,
+        min_delta=0,
+        nn_strategy="grouping",
+        nn_tie_breaking="random",
+        rank_method="max",
+        random_state=2024,
+    ).fit(X_scaled, y)
+
+    np.testing.assert_array_equal(selector_rand.selected_indices_, r_indices)
+    assert_allclose(selector_rand.score_path_, r_step_t, atol=1e-9)
+
+
+def test_r_foci_num_features_equiv():
+    """Without R: max_features=k selects k features with non-decreasing scores."""
+    X_df, y = make_demo_data(n=300, p=10, seed=0)
+    k = 4
+    selector = FOCISelector(
+        method="r_foci", min_delta=None, max_features=k, random_state=0
+    ).fit(X_df, y)
+
+    assert len(selector.selected_indices_) == k
+    assert len(selector.score_path_) == k
+    diffs = np.diff(selector.score_path_)
+    assert np.all(diffs >= -1e-12)
