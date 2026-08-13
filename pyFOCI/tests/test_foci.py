@@ -25,7 +25,7 @@ from pyFOCI._foci import (
 )
 
 
-def make_demo_data(n: int = 100, p: int = 30, seed: int = 0):
+def make_data(n: int = 100, p: int = 30, seed: int = 0):
     """
     Create a deterministic small dataset for feature selection tests,
     with n entries and p features per entry.
@@ -72,7 +72,7 @@ def test_default_stopping_and_transform():
     includes column index 3, and transform returns the selected columns in the
     same order.
     """
-    X_df, y = make_demo_data(n=300, p=40, seed=0)
+    X_df, y = make_data(n=300, p=40, seed=0)
 
     selector = FOCISelector(random_state=0)
     selector.fit(X_df, y)
@@ -134,7 +134,7 @@ def test_min_delta_enforces_gap():
     With a positive min_delta, consecutive cumulative Tn values must improve
     by more than min_delta; the first selected Tn must exceed min_delta.
     """
-    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    X_df, y = make_data(n=200, p=10, seed=0)
     min_delta = 0.03
 
     selector = FOCISelector(random_state=0, min_delta=min_delta).fit(X_df, y)
@@ -151,7 +151,7 @@ def test_standardize_none():
     """
     standardize=None is also accepted.
     """
-    X_df, y = make_demo_data(n=100, p=10, seed=0)
+    X_df, y = make_data(n=100, p=10, seed=0)
 
     FOCISelector(random_state=0, standardize=None).fit(X_df, y)
 
@@ -160,7 +160,7 @@ def test_rank_method_max_is_default():
     """
     rank_method="max" is the default and should match an explicit max-rank fit.
     """
-    X_df, y = make_demo_data(n=100, p=10, seed=0)
+    X_df, y = make_data(n=100, p=10, seed=0)
 
     selector_default = FOCISelector(random_state=0, min_delta=None, max_features=3).fit(
         X_df, y
@@ -268,7 +268,7 @@ def test_random_state_int_reproducible():
 
 
 def test_nn_strategy_grouping_and_radius_are_accepted_and_reproducible():
-    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    X_df, y = make_data(n=200, p=10, seed=0)
 
     for strategy in ("grouping", "radius"):
         selector_1 = FOCISelector(
@@ -704,7 +704,7 @@ def test_Qn_invalid_tie_breaking_raises():
 @pytest.mark.parametrize("strategy", ["grouping", "radius"])
 def test_Qn_divided_by_Sy_equals_Tn_on_continuous_data(strategy):
     """On continuous data, Q_n(y, X) / S(y) == T_n(y, X) to machine precision."""
-    X_df, y = make_demo_data(n=300, p=10, seed=0)
+    X_df, y = make_data(n=300, p=10, seed=0)
     X_sub = X_df.iloc[:, :3].to_numpy()
     R = _rank(y, method="max")
     L = _rank(-y, method="max")
@@ -740,7 +740,7 @@ def test_n_jobs_zero_raises():
 
 def test_n_jobs_parallel_matches_sequential_for_mean_tie_breaking():
     """Parallel candidate scoring preserves deterministic selection results."""
-    X, y = make_demo_data(n=80, p=8, seed=42)
+    X, y = make_data(n=80, p=8, seed=42)
     params = dict(
         random_state=0,
         max_features=3,
@@ -865,7 +865,7 @@ def test_method_invalid_raises():
 
 
 def test_fuchs_is_default():
-    X_df, y = make_demo_data(n=100, p=10, seed=0)
+    X_df, y = make_data(n=100, p=10, seed=0)
     sel_default = FOCISelector(random_state=0).fit(X_df, y)
     sel_fuchs = FOCISelector(method="fuchs", random_state=0).fit(X_df, y)
 
@@ -877,7 +877,7 @@ def test_fuchs_is_default():
 
 @pytest.mark.parametrize("rank_method", ["max", "average"])
 def test_r_foci_accepts_both_rank_methods(rank_method):
-    X_df, y = make_demo_data(n=100, p=10, seed=0)
+    X_df, y = make_data(n=100, p=10, seed=0)
     selector = FOCISelector(
         method="r_foci",
         rank_method=rank_method,
@@ -893,7 +893,7 @@ def test_r_foci_accepts_both_rank_methods(rank_method):
 @pytest.mark.parametrize("strategy", ["grouping", "radius"])
 @pytest.mark.parametrize("tie_breaking", ["random", "mean"])
 def test_r_foci_accepts_both_nn_strategies_and_tie_breaking(strategy, tie_breaking):
-    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    X_df, y = make_data(n=200, p=10, seed=0)
     sel1 = FOCISelector(
         method="r_foci",
         nn_strategy=strategy,
@@ -915,7 +915,7 @@ def test_r_foci_accepts_both_nn_strategies_and_tie_breaking(strategy, tie_breaki
 
 
 def test_methods_agree_on_continuous_data():
-    X_df, y = make_demo_data(n=400, p=20, seed=0)
+    X_df, y = make_data(n=400, p=20, seed=0)
 
     sel_fuchs = FOCISelector(
         method="fuchs",
@@ -979,7 +979,7 @@ def test_r_foci_min_delta_none_selects_up_to_max():
 
 
 def test_r_foci_min_delta_enforces_gap():
-    X_df, y = make_demo_data(n=200, p=10, seed=0)
+    X_df, y = make_data(n=200, p=10, seed=0)
     min_delta = 0.03
 
     selector = FOCISelector(method="r_foci", random_state=0, min_delta=min_delta).fit(
@@ -1007,7 +1007,7 @@ def test_r_foci_constant_y_selects_none(method):
 
 @pytest.mark.parametrize("tie_breaking", ["random", "mean"])
 def test_r_foci_parallel_matches_sequential(tie_breaking):
-    X, y = make_demo_data(n=80, p=8, seed=42)
+    X, y = make_data(n=80, p=8, seed=42)
     params = dict(
         method="r_foci",
         random_state=42,
@@ -1139,7 +1139,7 @@ cat("T", paste(format(res$stepT, digits=17), collapse=","), "\n")
 
 def test_r_foci_num_features_equiv():
     """Without R: max_features=k selects k features with non-decreasing scores."""
-    X_df, y = make_demo_data(n=300, p=10, seed=0)
+    X_df, y = make_data(n=300, p=10, seed=0)
     k = 4
     selector = FOCISelector(
         method="r_foci", min_delta=None, max_features=k, random_state=0
