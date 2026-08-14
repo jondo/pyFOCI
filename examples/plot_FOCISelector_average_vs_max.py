@@ -18,7 +18,7 @@ paste back.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 from sklearn.model_selection import train_test_split
 
@@ -87,9 +87,7 @@ def test_r2(idx, X_train, X_test, y_train, y_test):
     """Test R² of the downstream model fitted on the selected columns."""
     if len(idx) == 0:
         return 0.0
-    pred = HistGradientBoostingRegressor(
-        max_iter=100, learning_rate=0.1, max_leaf_nodes=15, random_state=0
-    )
+    pred = RandomForestRegressor(n_estimators=100, random_state=0, n_jobs=-1)
     pred.fit(X_train[:, idx], y_train)
     return r2_score(y_test, pred.predict(X_test[:, idx]))
 

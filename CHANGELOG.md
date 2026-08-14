@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed the example `plot_FOCISelector_average_beats_max.py` to
   `plot_FOCISelector_average_vs_max.py` and updated it to show that neither
   ranking method is uniformly better.
+- Switched the downstream evaluation model in the examples from
+  `HistGradientBoostingRegressor` to `RandomForestRegressor`, whose defaults
+  need no explanation.
 
 ### Fixed
 - Corrected the 0.5.0 note that `rank_method="average"` "empirically makes the
