@@ -80,7 +80,8 @@ ruff = { cmd = "ruff check --output-format=full pyFOCI && ruff check --output-fo
 lint = { depends-on = ["black", "ruff"]}
 
 [tool.pixi.feature.test.dependencies]
-# Avoid PytestRemovedIn10Warning from sklearn's parametrize_with_checks until it is fixed in sklearn.
+# Avoid PytestRemovedIn10Warning from sklearn's parametrize_with_checks.
+# This will be fixed in scikit-learn 1.10.0, see https://github.com/scikit-learn/scikit-learn/pull/34448
 pytest = "<8.4"
 pytest-cov = "*"
 
