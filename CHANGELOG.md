@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Renamed the example `plot_FOCISelector_average_beats_max.py` to
+  `plot_FOCISelector_average_vs_max.py` and updated it to show that neither
+  ranking method is uniformly better.
+
+### Fixed
+- Corrected the 0.5.0 note that `rank_method="average"` "empirically makes the
+  estimator work better" on tied targets. Re-evaluation over many seeds shows
+  the two methods are comparable: both can stop prematurely or select spurious
+  distractors, just on different seeds.
+
 ## [0.7.0] - 2026-08-13
 
 ### Added
