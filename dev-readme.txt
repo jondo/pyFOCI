@@ -4,17 +4,17 @@ Testing and merging:
 1. Locally:
 -----------
 
-# On new Python release:
+# To update "latest", e.g. on a new Python release:
 pixi update
 
 pixi run -e lint lint
 
-pixi run -e latest test
-# Also examine the resulting coverage.xml.
-
 # Optional: to also run the black-box cross-check against the CRAN FOCI reference,
 # install R (https://cran.r-project.org) and in R: install.packages("FOCI")
 # The test self-skips when Rscript or the FOCI package are unavailable.
+
+pixi run -e latest test
+# Also examine the resulting coverage.xml.
 
 pixi run -e doc build-doc
 # Also examine the resulting example plot.
