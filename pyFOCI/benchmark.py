@@ -1,7 +1,5 @@
-"""Measure local FOCISelector candidate-scoring parallelism.
-
-This is intentionally a benchmark script, rather than a test: performance
-varies with available CPUs, BLAS threading, and host load.
+"""Measure local FOCISelector candidate-scoring parallelism. Note that
+performance varies with available CPUs, BLAS threading, and host load.
 """
 
 import argparse

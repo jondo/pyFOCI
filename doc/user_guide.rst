@@ -211,9 +211,8 @@ All available benchmark options can be displayed via ``--help``:
                         [--seed SEED] [--method {r_foci,ct_foci}]
                         [--n-jobs N_JOBS [N_JOBS ...]]
 
-    Measure local FOCISelector candidate-scoring parallelism. This is
-    intentionally a benchmark script, rather than a test: performance varies with
-    available CPUs, BLAS threading, and host load.
+    Measure local FOCISelector candidate-scoring parallelism. Note that performance
+    varies with available CPUs, BLAS threading, and host load.
 
     options:
       -h, --help            show this help message and exit
