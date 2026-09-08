@@ -1,12 +1,20 @@
 name: Documentation
 
+# The published documentation at https://m3dm-jku.github.io/pyFOCI/ is only
+# updated for releases, i.e. when this workflow runs for a "v*" tag:
+#
+#   - release.yml calls this workflow for every pushed "v*" tag, after the unit
+#     tests and the linter have passed.
+#   - workflow_dispatch can re-deploy a release: choose the release tag as ref.
+#
+# Everything else only builds the docs as a check and never publishes:
+#   - pull requests against main
+#   - workflow_dispatch on a branch
 on:
-  push:
-    branches:
-    - main
   pull_request:
     branches:
       - main
+  workflow_dispatch:
   workflow_call:
 
 jobs:
@@ -30,9 +38,9 @@ jobs:
       run: pixi run -e doc build-doc
 
     - name: Update the main gh-page website
-      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       uses: peaceiris/actions-gh-pages@v4.1.0
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ./doc/_build/html
-        commit_message: "[ci skip] ${{ github.event.head_commit.message }}"
+        commit_message: "[ci skip] Release ${{ github.ref_name }} ${{ github.sha }}"

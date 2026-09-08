@@ -40,7 +40,8 @@ Update the [Unreleased] changelog section, if relevant
 printf 'Fast-forwarding main to dev: '; git merge-base --is-ancestor main dev && git branch -f main dev && echo OK || echo ERROR
 
 git push origin main:main
-# By this, The GitHub repo setting "Automatically delete head branches"
+# This does not change the published documentation.
+# By this push, The GitHub repo setting "Automatically delete head branches"
 # deletes the dev branch in the pull request, for easier creation of the next pull request from dev.
 
 Check the formatting of https://github.com/m3dm-jku/pyFOCI/blob/main/CHANGELOG.md
@@ -55,7 +56,9 @@ Update the changelog, commit with "Release 0.1.2".
 
 # Tag the commit as "v0.1.2" and push it, including the tag:
 git push origin main:main v0.1.2
+# This triggers linting, unit tests, docs building + publishing, and the PyPI release.
 
+Check the documentation page https://m3dm-jku.github.io/pyFOCI/ .
 Check the GitHub and PyPI release pages.
 
 Save changed doc pages to archive.org,

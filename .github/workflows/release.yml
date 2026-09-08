@@ -17,6 +17,11 @@ jobs:
 
   docs:
     name: Documentation
+    # This is the only place that updates https://m3dm-jku.github.io/pyFOCI/:
+    # the docs workflow publishes only when it runs for a "v*" tag.
+    # Waiting for the tests and the linter keeps a broken release from
+    # changing the published website.
+    needs: [test, lint]
     uses: ./.github/workflows/deploy-gh-pages.yml
 
   build:
