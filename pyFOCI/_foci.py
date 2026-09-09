@@ -545,6 +545,11 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         assigns deterministic random streams per candidate, so results are
         reproducible and identical across worker counts.
 
+    verbose : int or bool, default=0
+        If non-zero, print each selected feature during fitting in simple
+        ``print(score, feature_name)`` format, using ``"x{index}"`` when names
+        are unavailable.
+
     Attributes
     ----------
     n_features_in_ : int
@@ -585,6 +590,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             Interval(Integral, None, -1, closed="right"),
             Interval(Integral, 1, None, closed="left"),
         ],
+        "verbose": ["verbose"],
     }
 
     def __init__(
@@ -599,6 +605,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         nn_tie_breaking="random",
         random_state=None,
         n_jobs=None,
+        verbose=0,
     ):
         self.max_features = max_features
         self.min_delta = min_delta
@@ -609,6 +616,7 @@ class FOCISelector(SelectorMixin, BaseEstimator):
         self.nn_tie_breaking = nn_tie_breaking
         self.random_state = random_state
         self.n_jobs = n_jobs
+        self.verbose = verbose
 
     @_fit_context(prefer_skip_nested_validation=True)
     def fit(self, X, y):
@@ -726,6 +734,13 @@ class FOCISelector(SelectorMixin, BaseEstimator):
             score_path.append(best_score)
             remaining.remove(best_j)
             score_prev = best_score
+
+            if self.verbose:
+                if hasattr(self, "feature_names_in_"):
+                    feature_name = self.feature_names_in_[best_j]
+                else:
+                    feature_name = f"x{best_j}"
+                print(best_score, feature_name)
 
         # Persist learned attributes
         self.selected_indices_ = np.asarray(selected, dtype=int)

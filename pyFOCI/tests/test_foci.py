@@ -1298,3 +1298,65 @@ def test_r_foci_num_features_equiv():
     assert len(selector.score_path_) == k
     diffs = np.diff(selector.score_path_)
     assert np.all(diffs >= -1e-12)
+
+
+def test_verbose_prints_selected_features_during_fit(capsys):
+    """verbose prints each accepted feature with its selection score."""
+    X, y = make_data(n=60, p=5, seed=123)
+
+    selector = FOCISelector(
+        random_state=0,
+        min_delta=None,
+        max_features=2,
+        nn_tie_breaking="mean",
+        verbose=1,
+    ).fit(X, y)
+
+    captured = capsys.readouterr()
+    expected = "".join(
+        f"{score} {X.columns[feature_index]}\n"
+        for score, feature_index in zip(
+            selector.score_path_, selector.selected_indices_
+        )
+    )
+    assert captured.out == expected
+
+
+def test_verbose_prints_default_feature_names_for_numpy_input(capsys):
+    """verbose uses x{index} names when input feature names are unavailable."""
+    X_df, y = make_data(n=60, p=5, seed=123)
+    X = X_df.to_numpy()
+
+    selector = FOCISelector(
+        random_state=0,
+        min_delta=None,
+        max_features=2,
+        nn_tie_breaking="mean",
+        verbose=1,
+    ).fit(X, y)
+
+    assert not hasattr(selector, "feature_names_in_")
+
+    captured = capsys.readouterr()
+    expected = "".join(
+        f"{score} x{feature_index}\n"
+        for score, feature_index in zip(
+            selector.score_path_, selector.selected_indices_
+        )
+    )
+    assert captured.out == expected
+
+
+def test_verbose_zero_is_silent(capsys):
+    """verbose=0 preserves the existing silent default behavior."""
+    X, y = make_data(n=40, p=4, seed=321)
+
+    FOCISelector(
+        random_state=0,
+        min_delta=None,
+        max_features=1,
+        nn_tie_breaking="mean",
+    ).fit(X, y)
+
+    captured = capsys.readouterr()
+    assert captured.out == ""

@@ -156,6 +156,27 @@ When the target variable :math:`y` contains ties or is discrete (e.g. rounded me
 
    See :doc:`the score normalization comparison example </auto_examples/plot_FOCISelector_methods>` for an empirical demonstration.
 
+Selection progress reporting
+----------------------------
+
+Set ``verbose`` to a non-zero value to print each selected feature and its score with ``print(score,
+feature_name)`` as soon as it is accepted during ``fit``.
+
+For example:
+
+.. code-block:: python
+
+    selector = FOCISelector(verbose=1, random_state=0)
+    selector.fit(X_train, y_train)
+
+Example output:
+
+.. code-block:: text
+
+    0.08732941230541721 x3
+    0.12964076398721665 x1
+    0.17490260851003244 x0
+
 Parallel candidate scoring
 --------------------------
 
