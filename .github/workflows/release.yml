@@ -1,5 +1,15 @@
 name: Release
 
+# The permissions granted to the jobs of the workflows called from here
+# (test, lint, docs) may not exceed the permissions of this workflow.
+# Without this key the caller defaults to the repository's read-only token
+# and GitHub refuses to start the run ("Invalid workflow file ... The nested
+# job 'deploy-gh-pages' is requesting 'contents: write, pages: write', but is
+# only allowed ..."). These match what deploy-gh-pages.yml requests.
+permissions:
+  contents: write
+  pages: write
+
 on:
   push:
     tags:
