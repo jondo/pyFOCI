@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-09-09
 
 ### Added
 - `FOCISelector` now accepts `verbose`; when non-zero, the name of each selected
@@ -17,8 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** renamed the `FOCISelector` parameter value `method="fuchs"`
   to `method="ct_foci"`. The new value names the
   continuous-target ("ct") assumption that distinguishes the methods.
-- Replaced the second squared feature by a step function, which is another
-  different nonlinear signal.
+- In an example, replaced the second squared feature by a step function, which is
+  another different nonlinear signal.
 
 ## [0.8.0] - 2026-08-28
 
